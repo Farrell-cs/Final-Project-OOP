@@ -26,6 +26,9 @@
 @rem Set local scope for the variables with windows NT shell
 if "%OS%"=="Windows_NT" setlocal
 
+if defined JAVA_HOME if "%JAVA_HOME:~-4%"=="\bin" set "JAVA_HOME=%JAVA_HOME:~0,-4%"
+if defined JAVA_HOME if "%JAVA_HOME:~-5%"=="\bin\" set "JAVA_HOME=%JAVA_HOME:~0,-5%"
+
 set DIRNAME=%~dp0
 if "%DIRNAME%"=="" set DIRNAME=.
 @rem This is normally unused
