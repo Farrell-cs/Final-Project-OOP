@@ -10,3 +10,9 @@ dependencies {
     implementation "io.github.berstanio:gdx-svmhelper-annotations:$graalHelperVersion"
   }
 }
+
+tasks.register('testMovement', JavaExec) {
+  dependsOn 'compileTestJava'
+  mainClass = 'com.Ruinfall.frontend.MovementTests'
+  classpath = sourceSets.test.runtimeClasspath
+}
