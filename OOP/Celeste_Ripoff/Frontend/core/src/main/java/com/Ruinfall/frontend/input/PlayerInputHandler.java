@@ -37,7 +37,7 @@ public class PlayerInputHandler {
         moveY = (up ? 1 : 0) - (down ? 1 : 0);
         rawMove.set(moveX, moveY);
 
-        boolean jumpPressed = Gdx.input.isKeyJustPressed(Input.Keys.C) ||
+        boolean jumpPressed = Gdx.input.isKeyJustPressed(Input.Keys.W) ||
                               Gdx.input.isKeyJustPressed(Input.Keys.SPACE) ||
                               Gdx.input.isKeyJustPressed(Input.Keys.K);
 

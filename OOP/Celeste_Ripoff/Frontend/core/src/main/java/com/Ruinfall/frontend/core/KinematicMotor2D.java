@@ -27,6 +27,7 @@ public class KinematicMotor2D {
     private int preferredCeilingNudgeDir;
     private float liftBoostTimer;
     private float liftBoostGraceDuration = 0.15f;
+    private float pogoBounceVelocity = 420f;
 
     public KinematicMotor2D() {
         setDucking(false);
@@ -134,6 +135,11 @@ public class KinematicMotor2D {
 
     public void move(Vector2 velocity, float dt, Runnable onCollideX, Runnable onCollideY) {
         moveX(velocity.x * dt, onCollideX);
+        moveY(velocity.y * dt, onCollideY);
+        updateGroundState(velocity.y);
+    }
+
+    public void bounce(Vector2 velocity, float dt, Runnable onCollideX, Runnable onCollideY) {
         moveY(velocity.y * dt, onCollideY);
         updateGroundState(velocity.y);
     }
