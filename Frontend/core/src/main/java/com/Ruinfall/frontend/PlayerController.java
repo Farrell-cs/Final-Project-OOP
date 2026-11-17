@@ -1,18 +1,18 @@
 package com.Ruinfall.frontend;
 
+import com.Ruinfall.frontend.objects.Collidable;
+import com.Ruinfall.frontend.objects.GameObject;
+import com.Ruinfall.frontend.states.*;
 import com.badlogic.gdx.math.Vector2;
 import com.Ruinfall.frontend.core.KinematicMotor2D;
 import com.Ruinfall.frontend.core.MovementMath;
 import com.Ruinfall.frontend.data.PlayerMovementStats;
 import com.Ruinfall.frontend.input.PlayerInputHandler;
-import com.Ruinfall.frontend.states.ClimbState;
-import com.Ruinfall.frontend.states.DashState;
-import com.Ruinfall.frontend.states.NormalState;
-import com.Ruinfall.frontend.states.PlayerStateMachine;
 import com.Ruinfall.frontend.subsystems.DashManager;
 import com.Ruinfall.frontend.subsystems.StaminaSystem;
+import com.Ruinfall.frontend.objects.GameObject;
 
-public class PlayerController {
+public class PlayerController extends GameObject {
     public enum JumpKind {
         GROUND,
         WALL_KICK,
@@ -40,6 +40,7 @@ public class PlayerController {
     private final NormalState normalState;
     private final ClimbState climbState;
     private final DashState dashState;
+    private final SwingState swingState;
 
     private final Vector2 velocity = new Vector2();
     private int facingDirection = 1;
@@ -65,6 +66,7 @@ public class PlayerController {
         normalState = new NormalState(this, stateMachine);
         climbState = new ClimbState(this, stateMachine);
         dashState = new DashState(this, stateMachine);
+        swingState = new SwingState(this, stateMachine);
 
         applyConfiguration();
         stateMachine.initialize(normalState);
