@@ -1,6 +1,6 @@
 package com.Ruinfall.frontend.objects.patterns.entityStrategy;
 
-import com.gylchrist.frontend.objects.GameObject;
+import com.Ruinfall.frontend.objects.GameObject;
 
 public class TargetPointMovement implements EntityMovementPattern {
     private float targetX;

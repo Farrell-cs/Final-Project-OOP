@@ -2,6 +2,8 @@ package com.Ruinfall.frontend;
 
 import com.Ruinfall.frontend.objects.Collidable;
 import com.Ruinfall.frontend.objects.GameObject;
+import com.Ruinfall.frontend.objects.Interactables.GrapplePoint;
+import com.Ruinfall.frontend.objects.Player;
 import com.Ruinfall.frontend.states.*;
 import com.badlogic.gdx.math.Vector2;
 import com.Ruinfall.frontend.core.KinematicMotor2D;
@@ -12,7 +14,7 @@ import com.Ruinfall.frontend.subsystems.DashManager;
 import com.Ruinfall.frontend.subsystems.StaminaSystem;
 import com.Ruinfall.frontend.objects.GameObject;
 
-public class PlayerController extends GameObject {
+public class PlayerController extends GameObject implements Player {
     public enum JumpKind {
         GROUND,
         WALL_KICK,
@@ -59,6 +61,7 @@ public class PlayerController extends GameObject {
     private boolean wasGroundedLastStep;
     private boolean pendingAirborneUltra;
     private int pendingUltraSignX;
+    private GrapplePoint grappleState;
 
     private PlayerEventListener listener;
 
@@ -428,4 +431,27 @@ public class PlayerController extends GameObject {
     public float getGrabCooldownTimer() { return grabCooldownTimer; }
     public Vector2 getLastDashDirection() { return lastDashDirection; }
     public boolean isLastDashDemodash() { return lastDashWasDemodash; }
+    public SwingState getSwingState() { return swingState; }
+
+    public boolean isGrounded() {
+        return motor.isGrounded();
+    }
+
+    public Vector2 getPosition() {
+        return motor.getPosition();
+    }
+
+    public Vector2 getMoveInput() {
+        return new Vector2(input.getMoveX(), input.getMoveY());
+    }
+
+    @Override
+    public String getName() {
+        return "Player";
+    }
+
+    @Override
+    public void takeDamage(int damage) {
+        System.out.println("Player took " + damage + " damage!");
+    }
 }

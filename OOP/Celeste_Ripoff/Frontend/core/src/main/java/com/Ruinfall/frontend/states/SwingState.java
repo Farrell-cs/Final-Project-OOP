@@ -2,8 +2,9 @@ package com.Ruinfall.frontend.states;
 
 import com.badlogic.gdx.math.Vector2;
 import com.Ruinfall.frontend.PlayerController;
+import com.Ruinfall.frontend.commands.SwingCommand;
 import com.Ruinfall.frontend.core.KinematicMotor2D;
-import com.Ruinfall.frontend.data.PlayerMovementStats;
+import com.Ruinfall.frontend.systems.GameEventBus;
 
 public class SwingState extends PlayerState {
 
@@ -26,6 +27,8 @@ public class SwingState extends PlayerState {
     private float pogoBounceVelocity = 420f;
     private boolean hasHitThisSwing = false;
 
+    private SwingCommand lastCommand;
+
     @Override
     public String getStateName() {
         return "Swing";
@@ -43,15 +46,13 @@ public class SwingState extends PlayerState {
         determineSwingDirection();
         calculateHitboxOffset();
 
-        // Trigger your animation or hitbox activation here
-        // player.playAnimation("swing_" + currentDirection.name().toLowerCase());
-        // player.activateWeaponHitbox(hitboxOffset, swingVector);
+        lastCommand = new SwingCommand(this, player);
+        lastCommand.execute();
     }
 
     @Override
     public void exit() {
         // Deactivate weapon hitbox when leaving the state
-        // player.deactivateWeaponHitbox();
     }
 
     @Override
@@ -60,7 +61,6 @@ public class SwingState extends PlayerState {
 
         // Keep hitbox synced to the player as they move during the swing
         calculateHitboxOffset();
-        // player.updateWeaponHitboxPosition(hitboxOffset);
 
         if (swingTimer >= swingDuration) {
             transitionOut();
@@ -69,8 +69,7 @@ public class SwingState extends PlayerState {
 
     @Override
     public void physicsUpdate(float dt) {
-        // Optional: Allow the player to keep moving/falling normally while swinging
-        // player.applyStandardMovement(dt);
+        // Allow the player to keep moving/falling normally while swinging
     }
 
     /**
@@ -78,20 +77,18 @@ public class SwingState extends PlayerState {
      * based on directional input and grounded state.
      */
     private void determineSwingDirection() {
-        // Replace these getters with your actual PlayerController input/state methods
-        Vector2 input = player.getMoveInput(); // Expected normalized or -1 to 1 axes
+        Vector2 input = player.getMoveInput();
         boolean isGrounded = player.isGrounded();
-        int facingDir = player.getFacingDirection(); // 1 for right, -1 for left
+        int facingDir = player.getFacingDirection();
 
         float deadzone = 0.35f;
         boolean pressingUp = input.y > deadzone;
         boolean pressingDown = input.y < -deadzone;
         boolean pressingHorizontal = Math.abs(input.x) > deadzone;
 
-        // Flip facing direction if horizontal input opposes current facing (optional)
         if (pressingHorizontal) {
             facingDir = input.x > 0 ? 1 : -1;
-            // player.setFacingDirection(facingDir);
+            player.setFacing(facingDir);
         }
 
         if (pressingUp && pressingHorizontal) {
@@ -101,7 +98,6 @@ public class SwingState extends PlayerState {
             currentDirection = SwingDirection.UP;
             swingVector.set(0f, 1f);
         } else if (pressingDown && !isGrounded && pressingHorizontal) {
-            // Downward swings are typically restricted to mid-air (like Hollow Knight / Dead Cells)
             currentDirection = SwingDirection.DIAGONAL_DOWN;
             swingVector.set(facingDir, -1f).nor();
         } else if (pressingDown && !isGrounded) {
@@ -117,12 +113,12 @@ public class SwingState extends PlayerState {
      * Computes the world-space position of the swing hitbox relative to the player.
      */
     private void calculateHitboxOffset() {
-        Vector2 playerCenter = player.getPosition(); // Adjust if getPosition() is bottom-center
+        Vector2 playerCenter = player.getPosition();
         hitboxOffset.set(swingVector).scl(reachDistance).add(playerCenter);
     }
 
     /**
-     * Call this from your collision listener when the swing connects with an enemy or hazard.
+     * Call this from your collision listener when the swing connects with an enemy, breakable, or hazard.
      */
     public void onSwingHit(boolean isPogoable) {
         if (hasHitThisSwing) return;
@@ -130,22 +126,16 @@ public class SwingState extends PlayerState {
 
         // Apply upward pogo bounce if swinging downward or diagonally downward
         if (isPogoable && (currentDirection == SwingDirection.DOWN || currentDirection == SwingDirection.DIAGONAL_DOWN)) {
-            KinematicMotor2D motor = player.getMotor();
-            if (motor != null) {
-                Vector2 vel = motor.getVelocity();
-                motor.setVelocity(vel.x, pogoBounceVelocity);
-            }
+            // Apply upward velocity directly on player
+            player.getVelocity().set(player.getVelocity().x, pogoBounceVelocity);
+            player.getDashes().tryRefillOnGround(); // Pogo resets dash count like in platformers
+            GameEventBus.getInstance().publish(GameEventBus.GameEvent.POGO_BOUNCE, player);
+            System.out.println("[SwingState] POGO BOUNCE triggered! Velocity set to: " + pogoBounceVelocity);
         }
     }
 
     private void transitionOut() {
-        // Swap with your actual Idle / Run / Fall state references
-        KinematicMotor2D motor = player.getMotor();
-        if (motor.isGrounded()) {
-            stateMachine.changeState(pla);
-        } else {
-            stateMachine.changeState(player.fallState);
-        }
+        stateMachine.changeState(player.getNormalState());
     }
 
     public SwingDirection getCurrentDirection() {
@@ -158,5 +148,13 @@ public class SwingState extends PlayerState {
 
     public Vector2 getHitboxOffset() {
         return hitboxOffset;
+    }
+
+    public float getPogoBounceVelocity() {
+        return pogoBounceVelocity;
+    }
+
+    public void setPogoBounceVelocity(float pogoBounceVelocity) {
+        this.pogoBounceVelocity = pogoBounceVelocity;
     }
 }

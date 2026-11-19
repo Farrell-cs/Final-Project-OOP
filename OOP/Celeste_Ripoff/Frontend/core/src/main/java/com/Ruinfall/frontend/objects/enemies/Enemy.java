@@ -1,11 +1,11 @@
 package com.Ruinfall.frontend.objects.enemies;
 
 import com.badlogic.gdx.graphics.Color;
-import com.gylchrist.frontend.objects.EntityShooter;
-import com.gylchrist.frontend.objects.Player;
-import com.gylchrist.frontend.objects.patterns.ShootingPattern;
-import com.gylchrist.frontend.objects.patterns.entityStrategy.EntityMovementPattern;
-import com.gylchrist.frontend.systems.AssetManager;
+import com.Ruinfall.frontend.objects.EntityShooter;
+import com.Ruinfall.frontend.objects.Player;
+import com.Ruinfall.frontend.objects.patterns.ShootingPattern;
+import com.Ruinfall.frontend.objects.patterns.entityStrategy.EntityMovementPattern;
+import com.Ruinfall.frontend.systems.AssetManager;
 
 public class Enemy extends EntityShooter {
     protected String name;

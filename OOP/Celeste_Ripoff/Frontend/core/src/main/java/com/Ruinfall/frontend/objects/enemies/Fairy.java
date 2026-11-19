@@ -1,8 +1,8 @@
 package com.Ruinfall.frontend.objects.enemies;
 
 import com.badlogic.gdx.graphics.Color;
-import com.gylchrist.frontend.objects.patterns.entityStrategy.LinearEntityMovement;
-import com.gylchrist.frontend.objects.patterns.shootingStrategy.FrontShot;
+import com.Ruinfall.frontend.objects.patterns.entityStrategy.LinearEntityMovement;
+import com.Ruinfall.frontend.objects.patterns.shootingStrategy.FrontShot;
 
 public class Fairy extends Enemy {
     private float shootTimer = 0f;

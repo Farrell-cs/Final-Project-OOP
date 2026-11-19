@@ -1,10 +1,10 @@
 package com.Ruinfall.frontend.objects.enemies;
 
 import com.badlogic.gdx.graphics.Color;
-import com.gylchrist.frontend.objects.Collidable;
-import com.gylchrist.frontend.objects.Player;
-import com.gylchrist.frontend.objects.patterns.entityStrategy.FixedMovement;
-import com.gylchrist.frontend.objects.patterns.shootingStrategy.SpreadShot;
+import com.Ruinfall.frontend.objects.Collidable;
+import com.Ruinfall.frontend.objects.Player;
+import com.Ruinfall.frontend.objects.patterns.entityStrategy.FixedMovement;
+import com.Ruinfall.frontend.objects.patterns.shootingStrategy.SpreadShot;
 
 public class Boss extends Enemy {
     // TODO: Deklarasikan field private `shootingPattern` bertipe ShootingPattern
