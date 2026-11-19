@@ -1,8 +1,8 @@
 package com.Ruinfall.frontend.objects.patterns.bulletStrategy;
 
-import com.gylchrist.frontend.objects.GameObject;
-import com.gylchrist.frontend.objects.bullets.Bullet;
-import com.gylchrist.frontend.objects.enemies.Enemy;
+import com.Ruinfall.frontend.objects.GameObject;
+import com.Ruinfall.frontend.objects.bullets.Bullet;
+import com.Ruinfall.frontend.objects.enemies.Enemy;
 
 import java.util.List;
 

@@ -15,6 +15,10 @@ public abstract class GameObject implements Collidable {
     protected Animation<TextureRegion> animation;
     protected float stateTime = 0f;
 
+    public GameObject() {
+        this(0, 0, 16, 16, 0, Color.WHITE);
+    }
+
     public GameObject(float x, float y, float width, float height, float speed,Color color)
     {
         this.x = x;

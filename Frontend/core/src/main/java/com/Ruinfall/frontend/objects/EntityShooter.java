@@ -1,10 +1,10 @@
 package com.Ruinfall.frontend.objects;
 
 import com.badlogic.gdx.graphics.Color;
-import com.gylchrist.frontend.objects.GameObject;
-import com.gylchrist.frontend.objects.patterns.ShootingPattern;
-import com.gylchrist.frontend.objects.patterns.entityStrategy.EntityMovementPattern;
-import com.gylchrist.frontend.systems.BulletManager;
+import com.Ruinfall.frontend.objects.GameObject;
+import com.Ruinfall.frontend.objects.patterns.ShootingPattern;
+import com.Ruinfall.frontend.objects.patterns.entityStrategy.EntityMovementPattern;
+import com.Ruinfall.frontend.systems.BulletManager;
 
 public abstract class EntityShooter extends GameObject {
     protected ShootingPattern shootingPattern;

@@ -1,5 +1,6 @@
 package com.Ruinfall.frontend;
 
+import com.Ruinfall.frontend.objects.Interactables.GrapplePoint;
 import com.badlogic.gdx.ApplicationAdapter;
 import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.graphics.OrthographicCamera;
@@ -27,6 +28,7 @@ public class Main extends ApplicationAdapter {
     private PlayerVisuals visuals;
     private CameraFollow cameraFollow;
     private BoxRoom boxRoom;
+    private GrapplePoint grapplePoint;
 
     private float accumulator;
 
@@ -40,6 +42,10 @@ public class Main extends ApplicationAdapter {
 
         boxRoom = new BoxRoom();
         player = new PlayerController();
+
+        // 1. Pass world coordinates: (x, y, width, height, grappleRadius)
+        grapplePoint = new GrapplePoint(4.0f, 5.0f, 0.5f, 0.5f, 4.5f);
+
         player.getMotor().setSolids(boxRoom.getBlocks());
 
         visuals = new PlayerVisuals(player);
@@ -75,9 +81,17 @@ public class Main extends ApplicationAdapter {
         float dt = Gdx.graphics.getDeltaTime();
         player.updateInput();
 
+        // 2. Single merged fixed-timestep loop
         accumulator += Math.min(dt, 0.25f);
         while (accumulator >= FIXED_DT) {
             player.stepPhysics(FIXED_DT);
+            grapplePoint.update(FIXED_DT);
+
+            // Check if player is within grapple radius
+            float px = player.getMotor().getPosition().x;
+            float py = player.getMotor().getPosition().y + player.getStats().normalColliderSize.y * 0.5f;
+            grapplePoint.checkPlayerRange(px, py);
+
             accumulator -= FIXED_DT;
         }
 
@@ -90,6 +104,13 @@ public class Main extends ApplicationAdapter {
         batch.setProjectionMatrix(camera.combined);
         batch.begin();
         boxRoom.render(batch, blockTexture);
+        grapplePoint.render(batch, blockTexture);
+        grapplePoint.renderTether(
+            batch,
+            blockTexture,
+            player.getMotor().getPosition().x,
+            player.getMotor().getPosition().y + player.getStats().normalColliderSize.y * 0.5f
+        );
         visuals.render(batch, blockTexture);
         batch.end();
     }

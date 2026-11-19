@@ -1,10 +1,10 @@
 package com.Ruinfall.frontend.objects.patterns.shootingStrategy;
 
-import com.gylchrist.frontend.objects.GameObject;
-import com.gylchrist.frontend.objects.bullets.Bullet;
-import com.gylchrist.frontend.objects.patterns.ShootingPattern;
-import com.gylchrist.frontend.objects.patterns.bulletStrategy.BulletMovementPattern;
-import com.gylchrist.frontend.systems.BulletManager;
+import com.Ruinfall.frontend.objects.GameObject;
+import com.Ruinfall.frontend.objects.bullets.Bullet;
+import com.Ruinfall.frontend.objects.patterns.ShootingPattern;
+import com.Ruinfall.frontend.objects.patterns.bulletStrategy.BulletMovementPattern;
+import com.Ruinfall.frontend.systems.BulletManager;
 
 public class SpreadShot implements ShootingPattern {
     private float speed;

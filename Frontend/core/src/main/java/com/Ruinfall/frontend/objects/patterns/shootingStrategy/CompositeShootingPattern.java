@@ -1,8 +1,8 @@
 // CompositeShootingPattern.java
 package com.Ruinfall.frontend.objects.patterns.shootingStrategy;
 
-import com.gylchrist.frontend.objects.patterns.ShootingPattern;
-import com.gylchrist.frontend.systems.BulletManager;
+import com.Ruinfall.frontend.objects.patterns.ShootingPattern;
+import com.Ruinfall.frontend.systems.BulletManager;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;

@@ -1,6 +1,6 @@
 package com.Ruinfall.frontend.objects.patterns.bulletStrategy;
 
-import com.gylchrist.frontend.objects.bullets.Bullet;
+import com.Ruinfall.frontend.objects.bullets.Bullet;
 
 public class LinearBulletMovement implements BulletMovementPattern {
     @Override
