@@ -35,6 +35,14 @@ public class NormalState extends PlayerState {
             return;
         }
 
+        if (player.tryStartGrapple()) {
+            return;
+        }
+
+        if (player.tryStartSwing()) {
+            return;
+        }
+
         boolean grounded = motor.isGrounded();
         if (grounded) {
             wallSlideTimer = stats.wallSlideTime;

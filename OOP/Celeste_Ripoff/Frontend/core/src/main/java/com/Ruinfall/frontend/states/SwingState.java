@@ -4,6 +4,7 @@ import com.badlogic.gdx.math.Vector2;
 import com.Ruinfall.frontend.PlayerController;
 import com.Ruinfall.frontend.commands.SwingCommand;
 import com.Ruinfall.frontend.core.KinematicMotor2D;
+import com.Ruinfall.frontend.data.PlayerMovementStats;
 import com.Ruinfall.frontend.systems.GameEventBus;
 
 public class SwingState extends PlayerState {
@@ -23,8 +24,8 @@ public class SwingState extends PlayerState {
     // Tune these values or pull them from PlayerMovementStats
     private float swingDuration = 0.22f;
     private float swingTimer = 0f;
-    private float reachDistance = 32f;
-    private float pogoBounceVelocity = 420f;
+    private float reachDistance = 1.5f;
+    private float pogoBounceVelocity = 18.0f;
     private boolean hasHitThisSwing = false;
 
     private SwingCommand lastCommand;
@@ -70,6 +71,36 @@ public class SwingState extends PlayerState {
     @Override
     public void physicsUpdate(float dt) {
         // Allow the player to keep moving/falling normally while swinging
+        PlayerMovementStats stats = player.getStats();
+        boolean grounded = player.isGrounded();
+        int effectiveMoveX = player.getEffectiveMoveX();
+
+        if (effectiveMoveX != 0) {
+            player.setFacing(effectiveMoveX);
+        }
+
+        float nextVx = com.Ruinfall.frontend.core.MovementMath.computeHorizontalVelocity(
+            player.getVelocity().x,
+            effectiveMoveX,
+            stats.maxRun,
+            stats.runAccel,
+            stats.runReduce,
+            stats.airMult,
+            grounded,
+            dt
+        );
+        player.getVelocity().x = nextVx;
+
+        if (grounded && player.getVelocity().y <= 0.0f) {
+            player.getVelocity().y = 0.0f;
+        } else {
+            float nextVy = com.Ruinfall.frontend.core.MovementMath.approach(
+                player.getVelocity().y,
+                -stats.maxFall,
+                stats.gravity * dt
+            );
+            player.getVelocity().y = nextVy;
+        }
     }
 
     /**
