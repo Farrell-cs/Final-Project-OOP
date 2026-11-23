@@ -6,7 +6,8 @@ import com.badlogic.gdx.math.Vector2;
 import com.badlogic.gdx.math.Vector3;
 import com.Ruinfall.frontend.PlayerController;
 
-public class CameraFollow {
+public class
+CameraFollow {
     private final OrthographicCamera camera;
     private final PlayerController target;
 
