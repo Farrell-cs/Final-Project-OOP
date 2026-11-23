@@ -51,6 +51,14 @@ public class PlayerVisuals implements PlayerController.PlayerEventListener {
         Color prev = batch.getColor();
         batch.setColor(targetColor);
         batch.draw(blockTexture, bounds.x, bounds.y, bounds.width, bounds.height);
+
+        // Visual slash effect when in SwingState
+        if (player.getStateMachine().getCurrentState() == player.getSwingState()) {
+            Vector2 hitbox = player.getSwingState().getHitboxOffset();
+            batch.setColor(1.0f, 0.95f, 0.4f, 0.8f);
+            batch.draw(blockTexture, hitbox.x - 0.4f, hitbox.y - 0.4f, 0.8f, 0.8f);
+        }
+
         batch.setColor(prev);
     }
 

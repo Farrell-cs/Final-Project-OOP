@@ -21,9 +21,9 @@ public class CrystalStalactite extends Stalactite {
     }
 
     public CrystalStalactite(float x, float y) {
-        super(x, y, 16f, 32f, Color.CYAN);
+        super(x, y, 0.7f, 1.4f, Color.CYAN);
         this.shakeDuration = 0.2f; // Detaches faster when disturbed
-        this.fallGravity = 350f;
+        this.fallGravity = 20.0f;
     }
 
     @Override

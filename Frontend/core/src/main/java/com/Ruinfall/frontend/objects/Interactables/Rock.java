@@ -37,7 +37,7 @@ public class Rock extends GameObject {
     }
 
     public Rock(float x, float y, ItemType dropType) {
-        this(x, y, 24f, 24f, 2, dropType, new Color(0.45f, 0.45f, 0.45f, 1f));
+        this(x, y, 1.2f, 1.2f, 2, dropType, new Color(0.45f, 0.45f, 0.45f, 1f));
     }
 
     public Rock(float x, float y, float width, float height, int health, ItemType dropType, Color color) {
@@ -66,7 +66,7 @@ public class Rock extends GameObject {
     public void onSwingHit(SwingState.SwingDirection direction, int facingDir) {
         if (!active) return;
 
-        float knockForce = 150f;
+        float knockForce = 8.0f;
         switch (direction) {
             case FRONT -> knockbackVx = facingDir * knockForce;
             case UP -> knockbackVy = knockForce;

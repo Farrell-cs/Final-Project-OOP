@@ -19,7 +19,7 @@ public class Item extends GameObject {
     private float initialY;
 
     public Item(float x, float y, String itemType) {
-        super(x, y, 16, 16, 20f, Color.YELLOW);
+        super(x, y, 0.6f, 0.6f, 20f, Color.YELLOW);
         this.itemType = itemType;
         this.initialY = y;
         try {
@@ -49,7 +49,7 @@ public class Item extends GameObject {
     }
 
     public Item(float x, float y, ItemType itemTypeEnum) {
-        super(x, y, 16, 16, 20f, Color.YELLOW);
+        super(x, y, 0.6f, 0.6f, 20f, Color.YELLOW);
         this.itemTypeEnum = itemTypeEnum;
         this.scoreValue = itemTypeEnum.getScoreValue();
         this.itemType = itemTypeEnum.name();
@@ -69,7 +69,7 @@ public class Item extends GameObject {
         super.update(delta);
         floatTimer += delta * 3f;
         // Subtle floating bob motion
-        this.y = initialY + (float) Math.sin(floatTimer) * 4f;
+        this.y = initialY + (float) Math.sin(floatTimer) * 0.15f;
     }
 
     public String getItemType() {

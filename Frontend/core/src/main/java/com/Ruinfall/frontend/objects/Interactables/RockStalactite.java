@@ -20,8 +20,8 @@ public class RockStalactite extends Stalactite {
     }
 
     public RockStalactite(float x, float y) {
-        super(x, y, 20f, 36f, new Color(0.35f, 0.35f, 0.35f, 1f));
-        this.fallGravity = 600f;
+        super(x, y, 0.8f, 1.5f, new Color(0.35f, 0.35f, 0.35f, 1f));
+        this.fallGravity = 30.0f;
         this.fallBehavior = new HeavyFallBehavior();
     }
 

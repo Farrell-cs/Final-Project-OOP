@@ -38,6 +38,14 @@ public class ClimbState extends PlayerState {
             return;
         }
 
+        if (player.tryStartGrapple()) {
+            return;
+        }
+
+        if (player.tryStartSwing()) {
+            return;
+        }
+
         if (input.hasBufferedJump()) {
             if (input.getMoveX() == -wallDir) {
                 player.performWallJump(-wallDir);

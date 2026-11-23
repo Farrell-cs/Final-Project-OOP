@@ -26,7 +26,7 @@ public class Barrels extends Rock {
     // ------------------------------------------------------------------ //
 
     public Barrels(float x, float y) {
-        super(x, y, 28f, 32f, 3,
+        super(x, y, 1.4f, 1.6f, 3,
               ItemType.BOMB,
               new Color(0.5f, 0.3f, 0.1f, 1f));  // brown
     }

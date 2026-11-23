@@ -12,6 +12,8 @@ public class PlayerInputHandler {
 
     private boolean jumpHeld;
     private boolean grabActive;
+    private boolean grapplePressed;
+    private boolean swingPressed;
     private boolean respawnPressedThisFrame;
     private boolean toggleDashesPressedThisFrame;
 
@@ -64,6 +66,14 @@ public class PlayerInputHandler {
         grabActive = Gdx.input.isKeyPressed(Input.Keys.Z) ||
                      Gdx.input.isKeyPressed(Input.Keys.L) ||
                      Gdx.input.isKeyPressed(Input.Keys.E);
+
+        grapplePressed = Gdx.input.isKeyJustPressed(Input.Keys.E) ||
+                         Gdx.input.isKeyJustPressed(Input.Keys.C) ||
+                         Gdx.input.isKeyJustPressed(Input.Keys.F);
+
+        swingPressed = Gdx.input.isKeyJustPressed(Input.Keys.F) ||
+                       Gdx.input.isKeyJustPressed(Input.Keys.Z) ||
+                       Gdx.input.isButtonJustPressed(Input.Buttons.LEFT);
 
         respawnPressedThisFrame = Gdx.input.isKeyJustPressed(Input.Keys.R);
         toggleDashesPressedThisFrame = Gdx.input.isKeyJustPressed(Input.Keys.T);
@@ -133,6 +143,14 @@ public class PlayerInputHandler {
 
     public boolean isGrabActive() {
         return grabActive;
+    }
+
+    public boolean isGrapplePressed() {
+        return grapplePressed;
+    }
+
+    public boolean isSwingPressed() {
+        return swingPressed;
     }
 
     public boolean isRespawnPressedThisFrame() {

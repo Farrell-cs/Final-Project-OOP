@@ -5,6 +5,7 @@ import com.Ruinfall.frontend.objects.GameObject;
 import com.Ruinfall.frontend.objects.Interactables.GrapplePoint;
 import com.Ruinfall.frontend.objects.Player;
 import com.Ruinfall.frontend.states.*;
+import com.badlogic.gdx.math.Rectangle;
 import com.badlogic.gdx.math.Vector2;
 import com.Ruinfall.frontend.core.KinematicMotor2D;
 import com.Ruinfall.frontend.core.MovementMath;
@@ -43,6 +44,7 @@ public class PlayerController extends GameObject implements Player {
     private final ClimbState climbState;
     private final DashState dashState;
     private final SwingState swingState;
+    private final GrappleState grappleState;
 
     private final Vector2 velocity = new Vector2();
     private int facingDirection = 1;
@@ -61,7 +63,7 @@ public class PlayerController extends GameObject implements Player {
     private boolean wasGroundedLastStep;
     private boolean pendingAirborneUltra;
     private int pendingUltraSignX;
-    private GrapplePoint grappleState;
+    private GrapplePoint nearbyGrapplePoint;
 
     private PlayerEventListener listener;
 
@@ -70,6 +72,7 @@ public class PlayerController extends GameObject implements Player {
         climbState = new ClimbState(this, stateMachine);
         dashState = new DashState(this, stateMachine);
         swingState = new SwingState(this, stateMachine);
+        grappleState = new GrappleState(this, stateMachine);
 
         applyConfiguration();
         stateMachine.initialize(normalState);
@@ -189,6 +192,23 @@ public class PlayerController extends GameObject implements Player {
         dashState.prepareDash(crouchDash[0]);
         stateMachine.changeState(dashState);
         return true;
+    }
+
+    public boolean tryStartGrapple() {
+        if (nearbyGrapplePoint != null && nearbyGrapplePoint.canGrapple() && input.isGrapplePressed()) {
+            grappleState.prepareGrapple(nearbyGrapplePoint);
+            stateMachine.changeState(grappleState);
+            return true;
+        }
+        return false;
+    }
+
+    public boolean tryStartSwing() {
+        if (input.isSwingPressed()) {
+            stateMachine.changeState(swingState);
+            return true;
+        }
+        return false;
     }
 
     public void recordDashLaunch(Vector2 dir, boolean wasDemodash) {
@@ -432,6 +452,9 @@ public class PlayerController extends GameObject implements Player {
     public Vector2 getLastDashDirection() { return lastDashDirection; }
     public boolean isLastDashDemodash() { return lastDashWasDemodash; }
     public SwingState getSwingState() { return swingState; }
+    public GrappleState getGrappleState() { return grappleState; }
+    public GrapplePoint getNearbyGrapplePoint() { return nearbyGrapplePoint; }
+    public void setNearbyGrapplePoint(GrapplePoint point) { this.nearbyGrapplePoint = point; }
 
     public boolean isGrounded() {
         return motor.isGrounded();
@@ -443,6 +466,19 @@ public class PlayerController extends GameObject implements Player {
 
     public Vector2 getMoveInput() {
         return new Vector2(input.getMoveX(), input.getMoveY());
+    }
+
+    @Override
+    public Rectangle getCoreHitbox() {
+        Vector2 pos = motor.getPosition();
+        Vector2 size = motor.getCurrentColliderSize();
+        return new Rectangle(pos.x - size.x * 0.5f, pos.y, size.x, size.y);
+    }
+
+    @Override
+    public Rectangle getGrazeHitbox() {
+        Rectangle core = getCoreHitbox();
+        return new Rectangle(core.x - 0.2f, core.y - 0.2f, core.width + 0.4f, core.height + 0.4f);
     }
 
     @Override
