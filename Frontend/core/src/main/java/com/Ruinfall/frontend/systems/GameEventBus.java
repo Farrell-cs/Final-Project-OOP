@@ -40,7 +40,11 @@ public class GameEventBus {
         ROCK_SHATTERED,
         ROCK_BROKEN,
         BARREL_EXPLODED,
-        SWING_EXECUTED
+        SWING_EXECUTED,
+        BOSS_SHOCKWAVE,
+        BOSS_PARRIED,
+        BOSS_DAZED,
+        BOSS_DEFEATED
     }
 
     // ------------------------------------------------------------------ //
