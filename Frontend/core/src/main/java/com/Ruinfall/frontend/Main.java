@@ -9,6 +9,7 @@ import com.Ruinfall.frontend.objects.items.Item;
 import com.Ruinfall.frontend.objects.items.ItemType;
 import com.Ruinfall.frontend.systems.GameEventBus;
 import com.Ruinfall.frontend.visuals.CameraFollow;
+import com.Ruinfall.frontend.visuals.CaveAtmosphereRenderer;
 import com.Ruinfall.frontend.visuals.PlayerVisuals;
 import com.Ruinfall.frontend.visuals.ProceduralTextures;
 import com.Ruinfall.frontend.visuals.VfxManager;
@@ -46,6 +47,7 @@ public class Main extends ApplicationAdapter {
     private LushCaveStage stage;
     private WaveMantis waveMantis;
     private VfxManager vfx;
+    private CaveAtmosphereRenderer atmosphere;
     private WorldHintRenderer hintRenderer;
 
     private final List<Item> activeItems = new ArrayList<>();
@@ -70,11 +72,12 @@ public class Main extends ApplicationAdapter {
 
         stage = new LushCaveStage();
         player = new PlayerController();
-        player.getMotor().getPosition().set(-10.0f, 1.0f);
+        player.getMotor().getPosition().set(-10.5f, 5.2f);
         player.getMotor().setSolids(stage.getBlocks());
 
         waveMantis = new WaveMantis(92.0f, 0.0f);
         vfx = new VfxManager();
+        atmosphere = new CaveAtmosphereRenderer();
         hintRenderer = new WorldHintRenderer();
 
         // Subscribe to GameEventBus
@@ -134,6 +137,7 @@ public class Main extends ApplicationAdapter {
 
         visuals = new PlayerVisuals(player);
         cameraFollow = new CameraFollow(camera, player);
+        cameraFollow.setInitialRoom(stage.findRoomAt(-10.5f, 5.2f));
 
         player.setEventListener(new PlayerController.PlayerEventListener() {
             @Override
@@ -145,6 +149,9 @@ public class Main extends ApplicationAdapter {
             public void onDashed(Vector2 dir) {
                 visuals.onDashed(dir);
                 cameraFollow.triggerShake(dir);
+                float px = player.getMotor().getPosition().x;
+                float py = player.getMotor().getPosition().y + player.getStats().normalColliderSize.y * 0.5f;
+                vfx.triggerDashRipple(px, py);
             }
 
             @Override
@@ -182,8 +189,8 @@ public class Main extends ApplicationAdapter {
             playerHurtCooldown = Math.max(0f, playerHurtCooldown - dt);
         }
 
-        // Hit-stop freezes simulation while keeping camera shake & VFX crisp
-        if (!vfx.updateHitStop(dt)) {
+        // Hit-stop, room transition, or death burst freezes simulation while keeping camera & VFX crisp
+        if (!vfx.updateHitStop(dt) && !cameraFollow.isTransitioning() && !vfx.isDeathActive()) {
             accumulator += Math.min(dt, 0.25f);
             while (accumulator >= FIXED_DT) {
                 stepSimulation(FIXED_DT);
@@ -192,15 +199,21 @@ public class Main extends ApplicationAdapter {
         }
 
         vfx.update(dt);
+        stage.update(dt);
+        atmosphere.update(dt);
+        hintRenderer.update(dt);
         visuals.update(dt);
         cameraFollow.update(dt);
 
-        // Deep mossy cave background
-        ScreenUtils.clear(0.05f, 0.09f, 0.11f, 1.0f);
+        // Deep forest-teal cavern backdrop
+        ScreenUtils.clear(0.03f, 0.08f, 0.10f, 1.0f);
 
         viewport.apply();
         batch.setProjectionMatrix(camera.combined);
         batch.begin();
+
+        // Procedural parallax cave silhouettes, glowing crystals & hanging vines
+        atmosphere.render(batch, blockTexture, camera);
 
         stage.render(batch, blockTexture);
 
@@ -243,9 +256,14 @@ public class Main extends ApplicationAdapter {
         // Render Wave Mantis boss & shockwaves
         waveMantis.render(batch, blockTexture);
 
-        // Render player
-        visuals.render(batch, blockTexture);
+        // Render player (hidden during Celeste death burst)
+        if (!vfx.isDeathActive()) {
+            visuals.render(batch, blockTexture);
+        }
         batch.end();
+
+        // Warm golden-amber diagonal light shafts across the mossy cavern
+        atmosphere.renderLightShafts(camera);
 
         // Render procedural world-space VFX (parry starburst, shockwave rings)
         vfx.renderWorld(camera);
@@ -266,6 +284,12 @@ public class Main extends ApplicationAdapter {
     private void stepSimulation(float dt) {
         float px = player.getMotor().getPosition().x;
         float py = player.getMotor().getPosition().y + player.getStats().normalColliderSize.y * 0.5f;
+
+        // Discrete Celeste room transition check
+        LushCaveStage.Room currentRoom = stage.findRoomAt(px, py);
+        if (currentRoom != cameraFollow.getCurrentRoom()) {
+            cameraFollow.transitionToRoom(currentRoom);
+        }
 
         // Trigger boss arena when player steps inside
         if (!stage.isArenaLocked() && waveMantis.getState() == WaveMantis.State.SLEEPING && px >= LushCaveStage.ARENA_TRIGGER_X) {
@@ -355,15 +379,19 @@ public class Main extends ApplicationAdapter {
                 ? new Rectangle(swingHitboxPos.x - 0.7f, swingHitboxPos.y - 0.7f, 1.4f, 1.4f)
                 : null;
 
-        // Player vs Spikes -> respawn at safe checkpoint
+        // Player vs Spikes -> Celeste-style instant death burst + quick wipe + room-entrance respawn
         for (LushCaveStage.SpikeHazard spike : stage.getSpikes()) {
             if (playerCore.overlaps(spike.bounds)) {
-                cameraFollow.addTrauma(0.45f);
-                vfx.triggerScreenFlash(new Color(0.95f, 0.2f, 0.2f, 1f), 0.35f, 0.2f);
-                float safeX = (player.getMotor().getPosition().x < 24f) ? -6.0f
-                        : (player.getMotor().getPosition().x < 38f) ? 20.0f : 34.0f;
-                player.getMotor().getPosition().set(safeX, 2.0f);
-                player.getVelocity().setZero();
+                cameraFollow.addTrauma(0.55f);
+                LushCaveStage.Room room = cameraFollow.getCurrentRoom();
+                float spawnX = (room != null) ? room.spawnX : -10.0f;
+                float spawnY = (room != null) ? room.spawnY : 1.0f;
+                float deathX = player.getMotor().getPosition().x;
+                float deathY = player.getMotor().getPosition().y + player.getStats().normalColliderSize.y * 0.5f;
+                vfx.triggerDeathBurst(deathX, deathY, () -> {
+                    player.getMotor().getPosition().set(spawnX, spawnY);
+                    player.getVelocity().setZero();
+                });
                 return;
             }
         }
@@ -462,6 +490,7 @@ public class Main extends ApplicationAdapter {
     public void dispose() {
         batch.dispose();
         vfx.dispose();
+        atmosphere.dispose();
         hintRenderer.dispose();
         ProceduralTextures.dispose();
     }
