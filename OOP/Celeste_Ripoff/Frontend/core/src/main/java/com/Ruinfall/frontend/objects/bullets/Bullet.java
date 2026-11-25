@@ -4,8 +4,12 @@ import com.badlogic.gdx.graphics.Color;
 import com.badlogic.gdx.graphics.g2d.SpriteBatch;
 import com.Ruinfall.frontend.objects.Collidable;
 import com.Ruinfall.frontend.objects.GameObject;
+import com.Ruinfall.frontend.objects.Player;
 import com.Ruinfall.frontend.objects.enemies.Enemy;
+import com.Ruinfall.frontend.objects.enemies.WormSegment;
 import com.Ruinfall.frontend.objects.patterns.bulletStrategy.BulletMovementPattern;
+import com.Ruinfall.frontend.objects.patterns.projectile.IBulletBehavior;
+import com.Ruinfall.frontend.systems.BulletManager;
 
 public class Bullet extends GameObject {
     private BulletType bulletType;
@@ -15,6 +19,8 @@ public class Bullet extends GameObject {
     private boolean isPlayerBullet;
     private boolean grazed;
     private BulletMovementPattern movementPattern;
+    private IBulletBehavior behavior;
+    private boolean destroyHookInvoked;
     // TODO: Deklarasikan atribut-atribut private berikut:
     // 1. float vx dan vy (komponen kecepatan vektor 2D)
     // 2. float angle dengan nilai awal 90f (sudut rotasi visual peluru dalam derajat)
@@ -28,6 +34,8 @@ public class Bullet extends GameObject {
         this.vx = vx;
         this.vy = vy;
         this.movementPattern = null;
+        this.behavior = null;
+        this.destroyHookInvoked = false;
 
         this.angle = (float)Math.toDegrees(Math.atan2(vy, vx)) + 90;
         this.speed = (float)Math.hypot(vx, vy);
@@ -92,11 +100,20 @@ public class Bullet extends GameObject {
     public void update(float delta) {
         super.update(delta);
 
-        if (movementPattern != null) {
+        if (behavior != null) {
+            behavior.update(this, delta);
+        } else if (movementPattern != null) {
             movementPattern.move(this, delta);
         } else {
             setX(getX() + vx * delta);
             setY(getY() + vy * delta);
+        }
+    }
+
+    public void notifyDestroyed(BulletManager bulletManager) {
+        if (!destroyHookInvoked && behavior != null) {
+            destroyHookInvoked = true;
+            behavior.onDestroy(this, bulletManager);
         }
     }
 
@@ -112,8 +129,30 @@ public class Bullet extends GameObject {
         return vx;
     }
 
+    public void setVx(float vx) {
+        this.vx = vx;
+        updateAngleAndSpeedFromVelocity();
+    }
+
     public float getVy() {
         return vy;
+    }
+
+    public void setVy(float vy) {
+        this.vy = vy;
+        updateAngleAndSpeedFromVelocity();
+    }
+
+    private void updateAngleAndSpeedFromVelocity() {
+        this.speed = (float) Math.hypot(vx, vy);
+        if (this.speed > 0.0001f) {
+            this.angle = (float) Math.toDegrees(Math.atan2(vy, vx)) + 90f;
+        }
+    }
+
+    public void setSize(float width, float height) {
+        if (width > 0f) this.width = width;
+        if (height > 0f) this.height = height;
     }
 
     public float getAngle() {
@@ -134,6 +173,12 @@ public class Bullet extends GameObject {
 
     public BulletMovementPattern getMovementPattern() { return movementPattern; }
     public void setMovementPattern(BulletMovementPattern movementPattern) { this.movementPattern = movementPattern; }
+
+    public IBulletBehavior getBehavior() { return behavior; }
+    public void setBehavior(IBulletBehavior behavior) {
+        this.behavior = behavior;
+        this.destroyHookInvoked = false;
+    }
 
     // TODO:
     // 1. Buat getter untuk isPlayerBullet, vx, dan vy
@@ -158,7 +203,10 @@ public class Bullet extends GameObject {
 
     @Override
     public void onCollision(Collidable other) {
-        if (other instanceof Enemy enemy) {
+        if (isDestroyed()) {
+            return;
+        }
+        if (isPlayerBullet && other instanceof Enemy enemy) {
             // 1. Tampilkan pesan bahwa Bullet mengenai Enemy dalam format:
             //    Bullet hit [EnemyName] for [damage] DMG!
             System.out.println("Bullet hit " + enemy.getName() + " for " + damage + " DMG!");
@@ -168,6 +216,12 @@ public class Bullet extends GameObject {
 
             // 3. Bikin si bullet hancur (destroy) setelah mengenai Enemy, apapun hasilnya
             //    (baik enemy kalah atau masih hidup), krn satu bullet cuma boleh kena satu target.
+            destroy();
+        } else if (isPlayerBullet && other instanceof WormSegment segment) {
+            segment.takeDamage(damage);
+            destroy();
+        } else if (!isPlayerBullet && other instanceof Player player) {
+            player.takeDamage(damage);
             destroy();
         }
     }

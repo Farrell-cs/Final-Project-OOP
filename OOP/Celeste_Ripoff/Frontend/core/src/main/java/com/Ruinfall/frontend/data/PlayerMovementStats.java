@@ -51,7 +51,7 @@ public class PlayerMovementStats {
     public float endDashUpMult = 0.75f;
     public float dashTime = 0.15f;
     public float dashAttackTime = 0.30f;
-    public float dashCooldown = 0.20f;
+    public float dashCooldown = 1.25f;
     public float dashRefillCooldown = 0.10f;
     public float dashFreezeTime = 0.05f;
     public float dashBufferTime = 0.10f;

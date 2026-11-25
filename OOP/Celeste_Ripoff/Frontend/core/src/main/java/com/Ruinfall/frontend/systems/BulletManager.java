@@ -55,8 +55,32 @@ public class BulletManager {
             b.update(delta);
             if (b.isDestroyed()) {
                 activeBullets.remove(i);
+                b.notifyDestroyed(this);
                 recycleBullet(b);
             }
+        }
+    }
+
+    /**
+     * Immediately removes all active enemy bullets without triggering timeout/death bursts.
+     */
+    public void clearEnemyBullets() {
+        for (int i = activeBullets.size() - 1; i >= 0; i--) {
+            Bullet b = activeBullets.get(i);
+            if (!b.getIsPlayerBullet()) {
+                activeBullets.remove(i);
+                recycleBullet(b);
+            }
+        }
+    }
+
+    /**
+     * Immediately removes all active bullets without triggering timeout/death bursts.
+     */
+    public void clearAll() {
+        for (int i = activeBullets.size() - 1; i >= 0; i--) {
+            Bullet b = activeBullets.remove(i);
+            recycleBullet(b);
         }
     }
 

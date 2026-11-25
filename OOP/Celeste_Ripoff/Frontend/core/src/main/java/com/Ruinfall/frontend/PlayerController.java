@@ -66,6 +66,8 @@ public class PlayerController extends GameObject implements Player {
     private GrapplePoint nearbyGrapplePoint;
 
     private PlayerEventListener listener;
+    private boolean canDash = true;
+    private float movementSpeedMultiplier = 1.0f;
 
     public PlayerController() {
         normalState = new NormalState(this, stateMachine);
@@ -175,7 +177,7 @@ public class PlayerController extends GameObject implements Player {
     }
 
     public boolean tryStartDashFromBuffer() {
-        if (!input.hasBufferedDash() || !dashes.canDash()) {
+        if (!canDash || !input.hasBufferedDash() || !dashes.canDash()) {
             return false;
         }
 
@@ -349,6 +351,8 @@ public class PlayerController extends GameObject implements Player {
         stamina.refill();
         dashes.forceRefill();
         dashes.cancelDashAttack();
+        canDash = true;
+        movementSpeedMultiplier = 1.0f;
         stateMachine.changeState(normalState);
 
         if (listener != null) {
@@ -455,6 +459,12 @@ public class PlayerController extends GameObject implements Player {
     public GrappleState getGrappleState() { return grappleState; }
     public GrapplePoint getNearbyGrapplePoint() { return nearbyGrapplePoint; }
     public void setNearbyGrapplePoint(GrapplePoint point) { this.nearbyGrapplePoint = point; }
+    public boolean isCanDash() { return canDash; }
+    public void setCanDash(boolean canDash) { this.canDash = canDash; }
+    public float getMovementSpeedMultiplier() { return movementSpeedMultiplier; }
+    public void setMovementSpeedMultiplier(float multiplier) {
+        this.movementSpeedMultiplier = Math.max(0.05f, multiplier);
+    }
 
     public boolean isGrounded() {
         return motor.isGrounded();

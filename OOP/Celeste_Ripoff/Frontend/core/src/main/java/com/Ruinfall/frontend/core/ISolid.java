@@ -6,4 +6,5 @@ import com.badlogic.gdx.math.Vector2;
 public interface ISolid {
     Rectangle getBounds();
     Vector2 getLiftSpeed();
+    default boolean isOneWay() { return false; }
 }

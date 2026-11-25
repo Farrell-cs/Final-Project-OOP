@@ -72,7 +72,7 @@ public class PlayerInputHandler {
                          Gdx.input.isKeyJustPressed(Input.Keys.F);
 
         swingPressed = Gdx.input.isKeyJustPressed(Input.Keys.F) ||
-                       Gdx.input.isKeyJustPressed(Input.Keys.Z) ||
+                       Gdx.input.isKeyJustPressed(Input.Keys.P) ||
                        Gdx.input.isButtonJustPressed(Input.Buttons.LEFT);
 
         respawnPressedThisFrame = Gdx.input.isKeyJustPressed(Input.Keys.R);
@@ -159,5 +159,23 @@ public class PlayerInputHandler {
 
     public boolean isToggleDashesPressedThisFrame() {
         return toggleDashesPressedThisFrame;
+    }
+
+    /**
+     * Test/automation helper to inject directional and action inputs without a live Gdx window.
+     */
+    public void setMoveInputForTest(int moveX, int moveY) {
+        this.moveX = Integer.compare(moveX, 0);
+        this.moveY = Integer.compare(moveY, 0);
+        this.rawMove.set(this.moveX, this.moveY);
+    }
+
+    public void triggerDashForTest(boolean crouchDash) {
+        this.dashBufferTimer = dashBufferDuration;
+        this.crouchDashBuffered = crouchDash;
+    }
+
+    public void triggerSwingForTest(boolean pressed) {
+        this.swingPressed = pressed;
     }
 }

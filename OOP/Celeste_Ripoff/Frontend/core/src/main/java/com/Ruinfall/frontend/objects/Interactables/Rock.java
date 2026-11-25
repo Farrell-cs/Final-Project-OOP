@@ -70,7 +70,6 @@ public class Rock extends GameObject {
         switch (direction) {
             case FRONT -> knockbackVx = facingDir * knockForce;
             case UP -> knockbackVy = knockForce;
-            case DOWN -> knockbackVy = -knockForce;
             case DIAGONAL_UP -> {
                 knockbackVx = facingDir * (knockForce * 0.7f);
                 knockbackVy = knockForce * 0.7f;

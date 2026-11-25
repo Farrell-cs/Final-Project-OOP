@@ -59,6 +59,19 @@ public class PlayerVisuals implements PlayerController.PlayerEventListener {
             batch.draw(blockTexture, hitbox.x - 0.4f, hitbox.y - 0.4f, 0.8f, 0.8f);
         }
 
+        // Dash cooldown indicator bar above player while recharging
+        if (player.getDashes().getCooldownRemaining() > 0.0f) {
+            float progress = player.getDashes().getCooldownProgress();
+            float barW = 0.9f;
+            float barH = 0.12f;
+            float barX = bounds.x + (bounds.width - barW) * 0.5f;
+            float barY = bounds.y + bounds.height + 0.18f;
+            batch.setColor(0.12f, 0.12f, 0.16f, 0.85f);
+            batch.draw(blockTexture, barX, barY, barW, barH);
+            batch.setColor(0.25f, 0.85f, 1.0f, 0.95f);
+            batch.draw(blockTexture, barX, barY, barW * progress, barH);
+        }
+
         batch.setColor(prev);
     }
 

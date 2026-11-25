@@ -67,11 +67,12 @@ public class NormalState extends PlayerState {
             float nextVx = MovementMath.approach(player.getVelocity().x, 0.0f, stats.duckFriction * dt);
             player.getVelocity().x = nextVx;
         } else {
+            float speedMult = player.getMovementSpeedMultiplier();
             float nextVx = MovementMath.computeHorizontalVelocity(
                 player.getVelocity().x,
                 effectiveMoveX,
-                stats.maxRun,
-                stats.runAccel,
+                stats.maxRun * speedMult,
+                stats.runAccel * speedMult,
                 stats.runReduce,
                 stats.airMult,
                 grounded,
@@ -110,6 +111,14 @@ public class NormalState extends PlayerState {
                 player.performWallbounce(1);
                 return true;
             }
+        }
+
+        if (grounded && player.getInput().getMoveY() < 0 && motor.isStandingOnOneWayPlatform()) {
+            player.getInput().consumeJumpBuffer();
+            motor.setDucking(false);
+            motor.startDropThrough(0.18f);
+            player.getVelocity().y = -2.0f;
+            return true;
         }
 
         if (grounded || player.getCoyoteTimer() > 0.0f) {
