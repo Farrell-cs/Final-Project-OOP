@@ -40,6 +40,22 @@ public class PlayerVisuals implements PlayerController.PlayerEventListener {
 
         Rectangle bounds = computeCurrentRenderBounds();
         ghostTrail.update(emitTrail, bounds, trailColor, dt);
+
+        if (!player.isCanDash()) {
+            EffectManager.getInstance().onSlimeDebuffTick(
+                player.getPosition().x,
+                player.getPosition().y
+            );
+        }
+
+        if (player.getVelocity().len2() > 256.0f) {
+            EffectManager.getInstance().onHighVelocityTrail(
+                player.getPosition().x,
+                player.getPosition().y + 0.6f,
+                player.getVelocity().x,
+                player.getVelocity().y
+            );
+        }
     }
 
     public void render(SpriteBatch batch, Texture blockTexture) {
@@ -90,6 +106,10 @@ public class PlayerVisuals implements PlayerController.PlayerEventListener {
     private Color resolveBlockColor() {
         int dashes = player.getDashes().getCurrentDashes();
         Color base = dashes >= 2 ? TWO_DASH_COLOR : (dashes == 1 ? ONE_DASH_COLOR : ZERO_DASH_COLOR);
+
+        if (!player.isCanDash()) {
+            base = new Color(base).lerp(new Color(0.30f, 0.90f, 0.28f, 1.0f), 0.55f);
+        }
 
         if (player.getStamina().isLowStamina()) {
             boolean flashOn = ((int) (flashTimer * 14.0f)) % 2 == 0;

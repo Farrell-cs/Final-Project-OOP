@@ -1,7 +1,9 @@
 package com.Ruinfall.frontend;
 
 import com.Ruinfall.frontend.objects.Interactables.Barrels;
+import com.Ruinfall.frontend.objects.Interactables.GrapplePoint;
 import com.Ruinfall.frontend.objects.Interactables.RegeneratingStalactite;
+import com.Ruinfall.frontend.objects.items.Item;
 import com.Ruinfall.frontend.objects.Player;
 import com.Ruinfall.frontend.objects.bullets.Bullet;
 import com.Ruinfall.frontend.objects.enemies.Boss;
@@ -16,6 +18,10 @@ import com.Ruinfall.frontend.objects.patterns.projectile.SpreadShot;
 import com.Ruinfall.frontend.objects.patterns.projectile.SpiralStream;
 import com.Ruinfall.frontend.states.SwingState;
 import com.Ruinfall.frontend.systems.BulletManager;
+import com.Ruinfall.frontend.visuals.CameraShake;
+import com.Ruinfall.frontend.visuals.EffectManager;
+import com.Ruinfall.frontend.visuals.HitstopManager;
+import com.Ruinfall.frontend.visuals.ParticleSystem;
 import com.Ruinfall.frontend.world.BoxRoom;
 import com.Ruinfall.frontend.world.OneWayPlatform;
 import com.badlogic.gdx.math.Rectangle;
@@ -35,6 +41,8 @@ public class WormBossAndProjectileTests {
         testDiagonalSwingAndPogo();
         testTwoPlatformArenaOneWayAndDropThrough();
         testDashCooldownNerfBarrelsAndRegeneratingStalactite();
+        testVfxParticlePoolShakeHitstopAndEvents();
+        testExpandedArenaGrappleNetworkStalactiteRandomizationAndBarrelPhysics();
 
         System.out.println("ALL WORM BOSS & PROJECTILE TESTS PASSED!");
     }
@@ -139,7 +147,7 @@ public class WormBossAndProjectileTests {
         assertNear(5.0f, dist05, 0.15f, "Segments spaced at fixed distance intervals");
 
         seg5.takeDamage(50);
-        assertEqual(250, boss.getHp(), "Damage to trailing segment deducts from shared boss HP");
+        assertEqual(1950, boss.getHp(), "Damage to trailing segment deducts from shared boss HP");
     }
 
     private static void testWormBossTerrainDependentSteering() {
@@ -173,7 +181,7 @@ public class WormBossAndProjectileTests {
         assertTrue(!bm.getActiveBullets().isEmpty(), "Stage 1 fires LinearBullet volleys while inside bounds");
 
         // Transition to Stage 2: 66% - 33%
-        boss.takeDamage(120); // HP = 180 / 300 = 60%
+        boss.takeDamage(800); // HP = 1200 / 2000 = 60%
         assertEqual(WormBoss.Stage.STAGE_2_SIDE_SWEEPS, boss.getCurrentStage(), "Transitions to Stage 2 at 60% HP");
         assertEqual(0, bm.getActiveBullets().size(), "Stage transition cleans up lingering bullets");
 
@@ -188,7 +196,7 @@ public class WormBossAndProjectileTests {
         player.getMotor().teleport(slime.getX() + slime.getWidth() * 0.5f, slime.getY());
         boss.updateBoss(1f / 60f, player, bm);
         assertTrue(!player.isCanDash(), "Overlapping SlimeHazard sets canDash = false");
-        assertTrue(player.getMovementSpeedMultiplier() < 1.0f, "Overlapping SlimeHazard applies speed debuff");
+        assertNear(slime.getSpeedMultiplier(), player.getMovementSpeedMultiplier(), 0.001f, "Overlapping SlimeHazard applies configured speed multiplier");
 
         // Exit slime -> restores dash and speed
         player.getMotor().teleport(-100f, -100f);
@@ -197,7 +205,7 @@ public class WormBossAndProjectileTests {
         assertNear(1.0f, player.getMovementSpeedMultiplier(), 0.001f, "Exiting SlimeHazard restores normal speed");
 
         // Transition to Stage 3: 33% - 0%
-        boss.takeDamage(90); // HP = 90 / 300 = 30%
+        boss.takeDamage(600); // HP = 600 / 2000 = 30%
         assertEqual(WormBoss.Stage.STAGE_3_BULLET_HELL_CORE, boss.getCurrentStage(), "Transitions to Stage 3 at 30% HP");
         assertEqual(0, boss.getSlimeHazards().size(), "Stage 3 transition cleans up SlimeHazard zones");
         assertEqual(0, bm.getActiveBullets().size(), "Stage 3 transition cleans up lingering bubbles/bullets");
@@ -218,7 +226,7 @@ public class WormBossAndProjectileTests {
         assertTrue(!bm.getActiveBullets().isEmpty(), "Stage 3 fires dense LinearBullet patterns");
 
         // Boss death cleanup
-        boss.takeDamage(90);
+        boss.takeDamage(600);
         assertTrue(!boss.isAlive(), "Boss defeated at 0 HP");
         assertEqual(0, bm.getActiveBullets().size(), "Boss death cleans up all active enemy bullets");
         assertEqual(0, boss.getSlimeHazards().size(), "Boss death cleans up all slime hazards");
@@ -281,10 +289,10 @@ public class WormBossAndProjectileTests {
     private static void testTwoPlatformArenaOneWayAndDropThrough() {
         BoxRoom room = new BoxRoom();
         List<OneWayPlatform> platforms = room.getPlatforms();
-        assertEqual(5, platforms.size(), "BoxRoom has 5 multi-tiered elevated platforms");
-        assertTrue(Math.abs(platforms.get(0).getBounds().y - platforms.get(1).getBounds().y) < 0.001f, "Lower platforms are symmetrical");
-        assertTrue(platforms.get(2).getBounds().y > platforms.get(0).getBounds().y, "Mid platform is above lower tier");
-        assertTrue(platforms.get(3).getBounds().y > platforms.get(2).getBounds().y, "Upper platforms are above mid tier");
+        assertEqual(9, platforms.size(), "Expanded BoxRoom has 9 multi-tiered elevated platforms");
+        assertTrue(Math.abs(platforms.get(0).getBounds().y - platforms.get(3).getBounds().y) < 0.001f, "Lower platforms are symmetrical");
+        assertTrue(platforms.get(4).getBounds().y > platforms.get(0).getBounds().y, "Mid platforms are above lower tier");
+        assertTrue(platforms.get(7).getBounds().y > platforms.get(4).getBounds().y, "Upper platforms are above mid tier");
 
         OneWayPlatform left = platforms.get(0);
         float platCenterX = left.getBounds().x + left.getBounds().width * 0.5f;
@@ -348,7 +356,7 @@ public class WormBossAndProjectileTests {
         barrel.takeHit(3);
         assertTrue(!barrel.isActive(), "Barrel breaks after 3 damage");
         barrel.detonate(boss, bm);
-        assertTrue(boss.getHp() < 300, "Barrel detonation deals AoE damage to nearby WormBoss");
+        assertTrue(boss.getHp() < 2000, "Barrel detonation deals AoE damage to nearby WormBoss");
         assertTrue(enemyBullet.getVx() > 0.0f, "Barrel detonation knocks back nearby enemy projectile");
         barrel.reset();
         assertTrue(barrel.isActive() && !barrel.hasDetonated(), "Barrel resets cleanly");
@@ -376,6 +384,125 @@ public class WormBossAndProjectileTests {
         stalactite.update(0.6f);
         assertEqual(RegeneratingStalactite.State.INTACT, stalactite.getState(), "Stalactite respawns as INTACT after cooldown");
         assertNear(1.0f, stalactite.getRenderScale(), 0.001f, "Regenerated stalactite has full scale 1.0");
+    }
+
+    private static void testVfxParticlePoolShakeHitstopAndEvents() {
+        // 1. ParticleSystem pooling
+        ParticleSystem ps = new ParticleSystem();
+        int initialPool = ps.getPooledParticleCount();
+        ps.emitBurst(0f, 0f, 10, 2f, 5f, 1f, 0f, 0.2f, 0.2f, 0.1f, 0.15f, com.badlogic.gdx.graphics.Color.WHITE);
+        assertEqual(10, ps.getActiveParticleCount(), "ParticleSystem activates 10 burst particles");
+        assertEqual(initialPool - 10, ps.getPooledParticleCount(), "Particles drawn from pool");
+        ps.update(0.3f);
+        assertEqual(0, ps.getActiveParticleCount(), "Expired particles deactivated");
+        assertEqual(initialPool, ps.getPooledParticleCount(), "Expired particles returned to pool");
+
+        // 2. CameraShake trauma decay
+        CameraShake shake = new CameraShake();
+        shake.addTrauma(0.6f);
+        shake.update(0.016f);
+        assertTrue(Math.abs(shake.getOffsetX()) > 0f || Math.abs(shake.getOffsetY()) > 0f, "CameraShake produces offset under trauma");
+        for (int i = 0; i < 60; i++) {
+            shake.update(0.02f);
+        }
+        assertNear(0f, shake.getTrauma(), 0.001f, "CameraShake trauma decays to 0");
+
+        // 3. HitstopManager freeze frames
+        HitstopManager hitstop = new HitstopManager();
+        hitstop.trigger(0.05f);
+        assertTrue(hitstop.isActive(), "Hitstop active after trigger");
+        float pausedDt = hitstop.computeEffectiveDt(0.02f);
+        assertTrue(pausedDt < 0.005f, "Hitstop scales down dt while active");
+        hitstop.computeEffectiveDt(0.05f);
+        assertTrue(!hitstop.isActive(), "Hitstop expires after duration");
+        assertNear(0.02f, hitstop.computeEffectiveDt(0.02f), 0.0001f, "Hitstop returns full dt once expired");
+
+        // 4. EffectManager event-driven VFX (Barrel + Stage transition + Bubble pop)
+        EffectManager fx = EffectManager.getInstance();
+        fx.clearAll();
+        Barrels barrel = new Barrels(1f, 1f);
+        barrel.takeHit(3); // publishes BARREL_EXPLODED
+        assertTrue(fx.getParticles().getActiveParticleCount() > 0, "Barrel explosion emits particles via GameEventBus");
+        assertTrue(fx.getParticles().getActiveRingCount() > 0, "Barrel explosion emits shockwave ring");
+        assertTrue(fx.getCameraShake().getTrauma() > 0.3f, "Barrel explosion adds camera trauma");
+        assertTrue(fx.getHitstop().isActive(), "Barrel explosion triggers hitstop");
+        fx.clearAll();
+    }
+
+    private static void testExpandedArenaGrappleNetworkStalactiteRandomizationAndBarrelPhysics() {
+        // 1. Expanded arena width (~1.5x-1.8x wider than 28f) & WormBoss Stage 3 center alignment
+        BoxRoom room = new BoxRoom();
+        Rectangle bounds = room.getArenaBounds();
+        assertTrue(bounds.width >= 42.0f && bounds.width <= 52.0f, "Arena width expanded ~1.5x-1.8x");
+        assertNear(0.0f, bounds.x + bounds.width * 0.5f, 0.001f, "Expanded arena remains horizontally centered at X=0");
+
+        WormBoss boss = new WormBoss("ExpandedWorm", 300);
+        assertEqual(bounds, boss.getMapBounds(), "Default WormBoss bounds match expanded BoxRoom arena");
+
+        // 2. Grapple network aerial chaining coverage across ceiling lane
+        List<GrapplePoint> anchors = room.createGrappleNetwork();
+        assertTrue(anchors.size() >= 10, "Grapple network provides rich anchor coverage across wider arena");
+        // Verify consecutive ceiling anchors (indices 0..4) have overlapping latch radii
+        for (int i = 0; i < 4; i++) {
+            GrapplePoint a = anchors.get(i);
+            GrapplePoint b = anchors.get(i + 1);
+            float dist = a.getCenter().dst(b.getCenter());
+            assertTrue(dist < a.getGrappleRadius() + b.getGrappleRadius(), "Adjacent ceiling grapple nodes overlap for aerial chaining");
+        }
+
+        // 3. Randomized stalactite jitter, respawn cooldown range, and arming stagger
+        RegeneratingStalactite rs = new RegeneratingStalactite(8.5f, 12.5f);
+        rs.configureRandomization(1.1f, 0.25f, 0.90f, 3.5f, 7.5f, 1.5f);
+        assertTrue(Math.abs(rs.getX() - 8.5f) <= 1.11f, "Stalactite X-jitter stays within lane bounds");
+        assertTrue(rs.getRegenCooldown() >= 3.5f && rs.getRegenCooldown() <= 7.5f, "Stalactite regen cooldown within randomized range");
+        assertTrue(rs.getArmingDelayTimer() >= 0.0f && rs.getArmingDelayTimer() <= 1.5f, "Stalactite initial arming stagger within configured range");
+
+        // 4. Barrel stationary physics, 3-hit durability, single-hit-per-swing, damage feedback, and heavy impact
+        EffectManager fx = EffectManager.getInstance();
+        fx.clearAll();
+        Barrels barrel = new Barrels(-5.0f, 2.8f);
+        assertEqual(0, barrel.getDamageStage(), "Fresh barrel starts at damage stage 0");
+
+        PlayerController player = new PlayerController();
+        player.getInput().setMoveInputForTest(1, 0);
+        player.getInput().triggerSwingForTest(true);
+        player.tryStartSwing();
+
+        // Simulate multiple collision frames during the same swing -> must only deal 1 hit
+        barrel.onCollision(player);
+        barrel.onCollision(player);
+        barrel.onCollision(player);
+        barrel.update(0.05f);
+
+        assertEqual(2, barrel.getHealth(), "Single player slash only deals 1 hit across multiple frames");
+        assertEqual(1, barrel.getDamageStage(), "Barrel enters damage stage 1 after first slash");
+        assertTrue(barrel.getHitFlashTimer() > 0f, "Non-lethal barrel hit triggers hit-flash");
+        assertTrue(fx.getParticles().getActiveParticleCount() > 0, "Non-lethal barrel hit emits wood/metal spark burst");
+        assertNear(-5.0f, barrel.getX(), 0.0001f, "Barrel does not slide horizontally after hit");
+        assertNear(2.8f, barrel.getY(), 0.0001f, "Barrel does not bounce vertically after hit");
+
+        // Second slash -> damage stage 2 (critical, still active)
+        barrel.takeHit(1);
+        assertTrue(barrel.isActive(), "Barrel survives 2 hits");
+        assertEqual(2, barrel.getDamageStage(), "Barrel enters critical damage stage 2 at 1 HP");
+
+        // Third slash -> breaks and drops items cleanly in place near anchor
+        barrel.takeHit(1);
+        assertTrue(!barrel.isActive(), "Barrel detonates on 3rd hit");
+        assertEqual(2, barrel.getDrops().size(), "Broken barrel spawns 2 drops");
+        for (Item drop : barrel.getDrops()) {
+            assertTrue(Math.abs(drop.getX() - (-5.0f)) <= 1.5f, "Barrel drop spawns in place near anchor X");
+        }
+
+        // Heavy impact from falling stalactite detonates full-HP barrel immediately
+        barrel.reset();
+        RegeneratingStalactite heavyStalactite = new RegeneratingStalactite(-5.0f, 12.5f);
+        heavyStalactite.configureRandomization(0f, 0.05f, 0.05f, 1.0f, 1.0f, 0f);
+        heavyStalactite.trigger();
+        heavyStalactite.update(0.1f); // enters FALLING
+        heavyStalactite.onCollision(barrel);
+        assertTrue(!barrel.isActive(), "Falling stalactite heavy impact detonates full-HP barrel immediately");
+        fx.clearAll();
     }
 
     private static void assertTrue(boolean cond, String msg) {

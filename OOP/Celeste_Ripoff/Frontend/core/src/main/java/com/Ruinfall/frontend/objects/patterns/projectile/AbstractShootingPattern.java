@@ -2,6 +2,8 @@ package com.Ruinfall.frontend.objects.patterns.projectile;
 
 import com.Ruinfall.frontend.objects.bullets.Bullet;
 import com.Ruinfall.frontend.systems.BulletManager;
+import com.Ruinfall.frontend.systems.GameEventBus;
+import com.Ruinfall.frontend.visuals.EffectManager;
 import com.badlogic.gdx.math.MathUtils;
 
 /**
@@ -77,6 +79,10 @@ public abstract class AbstractShootingPattern implements IShootingPattern {
             bullet.setSize(bulletSize, bulletSize);
             IBulletBehavior effective = (behavior != null) ? behavior.copy() : new LinearBullet();
             bullet.setBehavior(effective);
+            GameEventBus.getInstance().publish(
+                GameEventBus.GameEvent.BULLET_SPAWNED,
+                new EffectManager.BulletVfxPayload(originX, originY, vx, vy, effective instanceof BubbleBullet, isPlayer)
+            );
         }
         return bullet;
     }

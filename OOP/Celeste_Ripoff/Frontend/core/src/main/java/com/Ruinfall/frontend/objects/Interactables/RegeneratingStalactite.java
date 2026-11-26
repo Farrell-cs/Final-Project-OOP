@@ -7,6 +7,7 @@ import com.Ruinfall.frontend.objects.GameObject;
 import com.Ruinfall.frontend.objects.enemies.WormBoss;
 import com.Ruinfall.frontend.objects.enemies.WormSegment;
 import com.Ruinfall.frontend.systems.GameEventBus;
+import com.Ruinfall.frontend.visuals.EffectManager;
 import com.badlogic.gdx.graphics.Color;
 import com.badlogic.gdx.math.MathUtils;
 import com.badlogic.gdx.math.Rectangle;
@@ -26,6 +27,14 @@ public class RegeneratingStalactite extends Stalactite {
     }
 
     private State state = State.INTACT;
+    private final float laneCenterX;
+    private float xJitterRange = 0.85f;
+    private float minTriggerDelay = 0.30f;
+    private float maxTriggerDelay = 0.55f;
+    private float minRegenCooldown = 3.5f;
+    private float maxRegenCooldown = 7.0f;
+    private float maxInitialArmingDelay = 0.0f;
+    private float armingDelayTimer = 0.0f;
     private float regenCooldown = 4.0f;
     private float regenTimer = 0f;
     private float renderScale = 1.0f;
@@ -36,8 +45,52 @@ public class RegeneratingStalactite extends Stalactite {
 
     public RegeneratingStalactite(float x, float y) {
         super(x, y, 0.8f, 1.5f, new Color(0.55f, 0.72f, 0.85f, 1f));
-        this.shakeDuration = 0.45f;
+        this.laneCenterX = x;
         this.fallGravity = 32.0f;
+        randomizeSpawnSlot();
+        this.shakeDuration = sampleTriggerDelay();
+        this.regenCooldown = sampleRegenCooldown();
+    }
+
+    /**
+     * Configures per-lane horizontal jitter, randomized pre-drop trigger delay,
+     * asynchronous respawn cooldown window, and initial arming stagger.
+     */
+    public void configureRandomization(
+        float xJitterRange,
+        float minTriggerDelay,
+        float maxTriggerDelay,
+        float minRegenCooldown,
+        float maxRegenCooldown,
+        float maxInitialArmingDelay
+    ) {
+        this.xJitterRange = Math.max(0f, xJitterRange);
+        this.minTriggerDelay = Math.max(0.05f, minTriggerDelay);
+        this.maxTriggerDelay = Math.max(this.minTriggerDelay, maxTriggerDelay);
+        this.minRegenCooldown = Math.max(0.1f, minRegenCooldown);
+        this.maxRegenCooldown = Math.max(this.minRegenCooldown, maxRegenCooldown);
+        this.maxInitialArmingDelay = Math.max(0f, maxInitialArmingDelay);
+
+        randomizeSpawnSlot();
+        this.shakeDuration = sampleTriggerDelay();
+        this.regenCooldown = sampleRegenCooldown();
+        this.armingDelayTimer = this.maxInitialArmingDelay > 0f
+            ? MathUtils.random(0f, this.maxInitialArmingDelay)
+            : 0f;
+    }
+
+    private void randomizeSpawnSlot() {
+        float jitter = xJitterRange > 0f ? MathUtils.random(-xJitterRange, xJitterRange) : 0f;
+        this.initialX = laneCenterX + jitter;
+        this.x = this.initialX;
+    }
+
+    private float sampleTriggerDelay() {
+        return MathUtils.random(minTriggerDelay, maxTriggerDelay);
+    }
+
+    private float sampleRegenCooldown() {
+        return MathUtils.random(minRegenCooldown, maxRegenCooldown);
     }
 
     public void setSolids(List<? extends ISolid> solids) {
@@ -45,7 +98,7 @@ public class RegeneratingStalactite extends Stalactite {
     }
 
     public boolean checkProximityTrigger(float entityCenterX, float entityY) {
-        if (state != State.INTACT || !active) {
+        if (state != State.INTACT || !active || armingDelayTimer > 0f) {
             return false;
         }
         float centerX = initialX + width * 0.5f;
@@ -62,6 +115,7 @@ public class RegeneratingStalactite extends Stalactite {
             state = State.SHAKING;
             triggered = true;
             falling = false;
+            shakeDuration = sampleTriggerDelay();
             shakeTimer = shakeDuration;
             GameEventBus.getInstance().publish(GameEventBus.GameEvent.STALACTITE_TRIGGERED, this);
         }
@@ -76,11 +130,15 @@ public class RegeneratingStalactite extends Stalactite {
 
         switch (state) {
             case INTACT:
+                if (armingDelayTimer > 0f) {
+                    armingDelayTimer = Math.max(0f, armingDelayTimer - delta);
+                }
                 break;
 
             case SHAKING:
                 shakeTimer -= delta;
                 x = initialX + (float) ((Math.random() - 0.5) * 0.16);
+                EffectManager.getInstance().onStalactiteShaking(initialX + width * 0.5f, initialY);
                 if (shakeTimer <= 0f) {
                     x = initialX;
                     falling = true;
@@ -103,6 +161,10 @@ public class RegeneratingStalactite extends Stalactite {
             case REGENERATING:
                 regenTimer += delta;
                 renderScale = MathUtils.clamp(regenTimer / regenCooldown, 0f, 1f);
+                EffectManager.getInstance().onStalactiteRegenerating(
+                    initialX + width * 0.5f,
+                    initialY + height * (1f - renderScale * 0.5f)
+                );
                 if (regenTimer >= regenCooldown) {
                     renderScale = 1.0f;
                     regenTimer = 0f;
@@ -134,7 +196,7 @@ public class RegeneratingStalactite extends Stalactite {
         }
         if (other instanceof PlayerController player) {
             onEntityHit(player);
-        } else if (other instanceof WormBoss || other instanceof WormSegment) {
+        } else if (other instanceof WormBoss || other instanceof WormSegment || other instanceof Barrels) {
             onEntityHit((GameObject) other);
         }
     }
@@ -150,6 +212,8 @@ public class RegeneratingStalactite extends Stalactite {
             boss.takeDamage(bossDamage);
         } else if (entity instanceof WormSegment seg) {
             seg.takeDamage(bossDamage);
+        } else if (entity instanceof Barrels barrel) {
+            barrel.onHeavyImpact();
         }
         shatter();
     }
@@ -169,17 +233,24 @@ public class RegeneratingStalactite extends Stalactite {
         fallSpeed = 0f;
         regenTimer = 0f;
         renderScale = 0f;
-        x = initialX;
+        regenCooldown = sampleRegenCooldown();
+        randomizeSpawnSlot();
         y = initialY;
         GameEventBus.getInstance().publish(GameEventBus.GameEvent.ROCK_SHATTERED, this);
     }
 
     @Override
     public void reset() {
+        randomizeSpawnSlot();
         super.reset();
         this.state = State.INTACT;
         this.regenTimer = 0f;
         this.renderScale = 1.0f;
+        this.shakeDuration = sampleTriggerDelay();
+        this.regenCooldown = sampleRegenCooldown();
+        this.armingDelayTimer = this.maxInitialArmingDelay > 0f
+            ? MathUtils.random(0f, this.maxInitialArmingDelay)
+            : 0f;
     }
 
     public State getState() {
@@ -195,6 +266,17 @@ public class RegeneratingStalactite extends Stalactite {
     }
 
     public void setRegenCooldown(float regenCooldown) {
-        this.regenCooldown = Math.max(0.1f, regenCooldown);
+        float clamped = Math.max(0.1f, regenCooldown);
+        this.minRegenCooldown = clamped;
+        this.maxRegenCooldown = clamped;
+        this.regenCooldown = clamped;
+    }
+
+    public float getLaneCenterX() {
+        return laneCenterX;
+    }
+
+    public float getArmingDelayTimer() {
+        return armingDelayTimer;
     }
 }

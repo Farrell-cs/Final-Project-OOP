@@ -8,8 +8,11 @@ import com.Ruinfall.frontend.objects.Player;
 import com.Ruinfall.frontend.objects.enemies.Enemy;
 import com.Ruinfall.frontend.objects.enemies.WormSegment;
 import com.Ruinfall.frontend.objects.patterns.bulletStrategy.BulletMovementPattern;
+import com.Ruinfall.frontend.objects.patterns.projectile.BubbleBullet;
 import com.Ruinfall.frontend.objects.patterns.projectile.IBulletBehavior;
 import com.Ruinfall.frontend.systems.BulletManager;
+import com.Ruinfall.frontend.systems.GameEventBus;
+import com.Ruinfall.frontend.visuals.EffectManager;
 
 public class Bullet extends GameObject {
     private BulletType bulletType;
@@ -216,13 +219,30 @@ public class Bullet extends GameObject {
 
             // 3. Bikin si bullet hancur (destroy) setelah mengenai Enemy, apapun hasilnya
             //    (baik enemy kalah atau masih hidup), krn satu bullet cuma boleh kena satu target.
+            emitHitVfx();
             destroy();
         } else if (isPlayerBullet && other instanceof WormSegment segment) {
             segment.takeDamage(damage);
+            emitHitVfx();
             destroy();
         } else if (!isPlayerBullet && other instanceof Player player) {
             player.takeDamage(damage);
+            emitHitVfx();
             destroy();
         }
+    }
+
+    private void emitHitVfx() {
+        GameEventBus.getInstance().publish(
+            GameEventBus.GameEvent.BULLET_HIT,
+            new EffectManager.BulletVfxPayload(
+                x + width * 0.5f,
+                y + height * 0.5f,
+                vx,
+                vy,
+                behavior instanceof BubbleBullet,
+                isPlayerBullet
+            )
+        );
     }
 }

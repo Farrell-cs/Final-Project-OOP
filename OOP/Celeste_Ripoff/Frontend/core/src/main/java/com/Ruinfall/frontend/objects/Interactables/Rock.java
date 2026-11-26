@@ -70,6 +70,7 @@ public class Rock extends GameObject {
         switch (direction) {
             case FRONT -> knockbackVx = facingDir * knockForce;
             case UP -> knockbackVy = knockForce;
+            case DOWN -> knockbackVy = -knockForce;
             case DIAGONAL_UP -> {
                 knockbackVx = facingDir * (knockForce * 0.7f);
                 knockbackVy = knockForce * 0.7f;
@@ -118,9 +119,11 @@ public class Rock extends GameObject {
             takeHit(bullet.getDamage());
             bullet.destroy();
         } else if (other instanceof PlayerController player) {
-            // Check if player is swinging down to bounce
+            // Only register a single hit per player swing
             SwingState swingState = player.getSwingState();
-            if (swingState != null && player.getStateMachine().getCurrentState() == swingState) {
+            if (swingState != null
+                && player.getStateMachine().getCurrentState() == swingState
+                && !swingState.hasHitThisSwing()) {
                 onSwingHit(swingState.getCurrentDirection(), player.getFacingDirection());
                 swingState.onSwingHit(isPogoable());
             }

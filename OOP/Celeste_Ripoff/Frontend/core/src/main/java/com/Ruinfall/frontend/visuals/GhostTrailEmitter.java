@@ -4,37 +4,39 @@ import com.badlogic.gdx.graphics.Color;
 import com.badlogic.gdx.graphics.Texture;
 import com.badlogic.gdx.graphics.g2d.SpriteBatch;
 import com.badlogic.gdx.math.Rectangle;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
-import java.util.Iterator;
 import java.util.List;
+import java.util.Queue;
 
 public class GhostTrailEmitter {
     private static class Ghost {
-        Rectangle bounds;
-        Color color;
+        final Rectangle bounds = new Rectangle();
+        final Color color = new Color();
         float remainingLife;
         float totalLife;
 
-        Ghost(Rectangle bounds, Color color, float life) {
-            this.bounds = new Rectangle(bounds);
-            this.color = new Color(color);
+        void init(Rectangle bounds, Color color, float life) {
+            this.bounds.set(bounds);
+            this.color.set(color);
             this.remainingLife = life;
             this.totalLife = life;
         }
     }
 
     private final List<Ghost> ghosts = new ArrayList<>();
+    private final Queue<Ghost> ghostPool = new ArrayDeque<>();
     private float spawnTimer;
-    private final float spawnInterval = 0.035f;
+    private final float spawnInterval = 0.025f;
     private final float ghostLifetime = 0.22f;
 
     public void update(boolean shouldEmit, Rectangle playerBounds, Color color, float dt) {
-        Iterator<Ghost> it = ghosts.iterator();
-        while (it.hasNext()) {
-            Ghost g = it.next();
+        for (int i = ghosts.size() - 1; i >= 0; i--) {
+            Ghost g = ghosts.get(i);
             g.remainingLife -= dt;
             if (g.remainingLife <= 0.0f) {
-                it.remove();
+                ghosts.remove(i);
+                ghostPool.offer(g);
             }
         }
 
@@ -46,7 +48,9 @@ public class GhostTrailEmitter {
         spawnTimer -= dt;
         if (spawnTimer <= 0.0f) {
             spawnTimer = spawnInterval;
-            ghosts.add(new Ghost(playerBounds, color, ghostLifetime));
+            Ghost g = ghostPool.isEmpty() ? new Ghost() : ghostPool.poll();
+            g.init(playerBounds, color, ghostLifetime);
+            ghosts.add(g);
         }
     }
 

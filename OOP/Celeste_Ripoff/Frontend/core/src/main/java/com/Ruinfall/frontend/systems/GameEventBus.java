@@ -39,8 +39,17 @@ public class GameEventBus {
         CRYSTAL_SHATTERED,
         ROCK_SHATTERED,
         ROCK_BROKEN,
+        BARREL_HIT,
         BARREL_EXPLODED,
-        SWING_EXECUTED
+        SWING_EXECUTED,
+        PLAYER_DASH_START,
+        PLAYER_DASH_END,
+        GRAPPLE_LATCHED,
+        BOSS_TUNNEL_BREACH,
+        BOSS_STAGE_CHANGED,
+        BULLET_SPAWNED,
+        BUBBLE_POPPED,
+        BULLET_HIT
     }
 
     // ------------------------------------------------------------------ //

@@ -13,6 +13,9 @@ import com.Ruinfall.frontend.objects.patterns.projectile.SingleShot;
 import com.Ruinfall.frontend.objects.patterns.projectile.SpreadShot;
 import com.Ruinfall.frontend.objects.patterns.projectile.SpiralStream;
 import com.Ruinfall.frontend.systems.BulletManager;
+import com.Ruinfall.frontend.systems.GameEventBus;
+import com.Ruinfall.frontend.visuals.EffectManager;
+import com.Ruinfall.frontend.world.BoxRoom;
 import com.badlogic.gdx.graphics.Color;
 import com.badlogic.gdx.graphics.g2d.SpriteBatch;
 import com.badlogic.gdx.graphics.glutils.ShapeRenderer;
@@ -65,6 +68,7 @@ public class WormBoss extends Boss {
 
     private Stage currentStage = Stage.STAGE_1_BURROW_RUSH;
     private boolean useSegmentedHitboxes = true;
+    private boolean wasInsideBounds;
     private final Rectangle coreColumnHitbox = new Rectangle();
 
     // Stage 2 side-sweep state
@@ -96,11 +100,15 @@ public class WormBoss extends Boss {
     private PlayerController lastPlayer;
 
     public WormBoss(String name, int hp) {
-        this(-12f, 7f, name, hp);
+        this(BoxRoom.ARENA_MIN_X + 4.0f, BoxRoom.ARENA_MIN_Y + BoxRoom.ARENA_HEIGHT * 0.5f, name, hp);
     }
 
     public WormBoss(float x, float y, String name, int hp) {
-        this(x, y, name, hp, new Rectangle(-14f, 0f, 28f, 14f), 8, 1.0f);
+        this(
+            x, y, name, hp,
+            new Rectangle(BoxRoom.ARENA_MIN_X, BoxRoom.ARENA_MIN_Y, BoxRoom.ARENA_WIDTH, BoxRoom.ARENA_HEIGHT),
+            8, 1.0f
+        );
     }
 
     public WormBoss(
@@ -113,7 +121,9 @@ public class WormBoss extends Boss {
         float segmentSpacing
     ) {
         super(x, y, name, hp);
-        this.mapBounds = mapBounds != null ? new Rectangle(mapBounds) : new Rectangle(-14f, 0f, 28f, 14f);
+        this.mapBounds = mapBounds != null
+            ? new Rectangle(mapBounds)
+            : new Rectangle(BoxRoom.ARENA_MIN_X, BoxRoom.ARENA_MIN_Y, BoxRoom.ARENA_WIDTH, BoxRoom.ARENA_HEIGHT);
         this.segmentSpacing = Math.max(0.25f, segmentSpacing);
         this.width = 1.2f;
         this.height = 1.2f;
@@ -123,6 +133,7 @@ public class WormBoss extends Boss {
         initSegments(Math.max(1, segmentCount));
         initHistoryBuffer();
         initDefaultStrategies();
+        this.wasInsideBounds = isInsideMapBounds();
     }
 
     private void initSegments(int count) {
@@ -226,6 +237,20 @@ public class WormBoss extends Boss {
         }
 
         updateSlimeHazards(dt, player);
+
+        boolean insideNow = isInsideMapBounds();
+        if (insideNow != wasInsideBounds) {
+            wasInsideBounds = insideNow;
+            GameEventBus.getInstance().publish(
+                GameEventBus.GameEvent.BOSS_TUNNEL_BREACH,
+                new EffectManager.TunnelBreachPayload(
+                    getHeadCenterX(),
+                    getHeadCenterY(),
+                    MathUtils.cos(currentHeadingRad),
+                    MathUtils.sin(currentHeadingRad)
+                )
+            );
+        }
     }
 
     private void updateStage1(float dt, float targetX, float targetY, BulletManager bulletManager) {
@@ -298,7 +323,9 @@ public class WormBoss extends Boss {
             float sx = seg.getCenterX();
             float sy = seg.getCenterY();
             if (mapBounds.contains(sx, sy)) {
-                slimeHazards.add(new SlimeHazard(sx - 0.65f, sy - 0.35f, 1.3f, 0.7f, 1, 3));
+                // Scale slime trail duration cleanly with arena width so trails stay relevant across wider sweeps
+                float slimeLifetime = Math.max(3.5f, (mapBounds.width / sweepSpeed) * 1.85f);
+                slimeHazards.add(new SlimeHazard(sx - 0.65f, sy - 0.35f, 1.3f, 0.7f, 0.45f, slimeLifetime));
             }
         }
     }
@@ -510,11 +537,19 @@ public class WormBoss extends Boss {
             sweepPhase = SweepPhase.EXIT_TO_SIDE;
             slimeDropTimer = 0f;
             useSegmentedHitboxes = true;
+            GameEventBus.getInstance().publish(
+                GameEventBus.GameEvent.BOSS_STAGE_CHANGED,
+                new EffectManager.StageChangePayload(getHeadCenterX(), getHeadCenterY(), 2)
+            );
         } else if (to == Stage.STAGE_3_BULLET_HELL_CORE) {
             coreAligned = false;
             stage3CycleTimer = 0f;
             stage3PatternIndex = 0;
             useSegmentedHitboxes = false;
+            GameEventBus.getInstance().publish(
+                GameEventBus.GameEvent.BOSS_STAGE_CHANGED,
+                new EffectManager.StageChangePayload(getHeadCenterX(), getHeadCenterY(), 3)
+            );
         }
     }
 

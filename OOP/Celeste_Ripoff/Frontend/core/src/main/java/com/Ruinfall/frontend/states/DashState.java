@@ -4,6 +4,8 @@ import com.badlogic.gdx.math.Vector2;
 import com.Ruinfall.frontend.PlayerController;
 import com.Ruinfall.frontend.core.KinematicMotor2D;
 import com.Ruinfall.frontend.data.PlayerMovementStats;
+import com.Ruinfall.frontend.systems.GameEventBus;
+import com.Ruinfall.frontend.visuals.EffectManager;
 
 public class DashState extends PlayerState {
     private float dashTimer;
@@ -140,10 +142,21 @@ public class DashState extends PlayerState {
         player.getMotor().setAllowDashFloorPop(Math.abs(lockedDirection.y) < 0.01f && Math.abs(lockedDirection.x) > 0.01f);
         player.recordDashLaunch(lockedDirection, isCrouchDash);
         player.getVelocity().set(dashVel);
+
+        Vector2 pos = player.getPosition();
+        GameEventBus.getInstance().publish(
+            GameEventBus.GameEvent.PLAYER_DASH_START,
+            new EffectManager.DashVfxPayload(pos.x, pos.y + 0.6f, lockedDirection.x, lockedDirection.y)
+        );
     }
 
     private void finishDashNaturally() {
         PlayerMovementStats stats = player.getStats();
+        Vector2 pos = player.getPosition();
+        GameEventBus.getInstance().publish(
+            GameEventBus.GameEvent.PLAYER_DASH_END,
+            new EffectManager.DashVfxPayload(pos.x, pos.y + 0.6f, lockedDirection.x, lockedDirection.y)
+        );
 
         if (lockedDirection.y >= -0.01f) {
             Vector2 endVel = new Vector2(lockedDirection).scl(stats.endDashSpeed);

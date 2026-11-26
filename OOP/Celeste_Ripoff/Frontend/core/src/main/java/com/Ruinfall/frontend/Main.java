@@ -8,6 +8,7 @@ import com.Ruinfall.frontend.objects.enemies.WormSegment;
 import com.Ruinfall.frontend.objects.hazards.SlimeHazard;
 import com.Ruinfall.frontend.objects.items.Item;
 import com.Ruinfall.frontend.objects.items.ItemType;
+import com.Ruinfall.frontend.objects.patterns.projectile.BubbleBullet;
 import com.Ruinfall.frontend.systems.BulletManager;
 import com.Ruinfall.frontend.systems.GameEventBus;
 import com.Ruinfall.frontend.systems.StalactiteFactory;
@@ -17,12 +18,14 @@ import com.badlogic.gdx.graphics.Color;
 import com.badlogic.gdx.graphics.OrthographicCamera;
 import com.badlogic.gdx.graphics.Texture;
 import com.badlogic.gdx.graphics.g2d.SpriteBatch;
+import com.badlogic.gdx.math.MathUtils;
 import com.badlogic.gdx.math.Rectangle;
 import com.badlogic.gdx.math.Vector2;
 import com.badlogic.gdx.utils.ScreenUtils;
 import com.badlogic.gdx.utils.viewport.ExtendViewport;
 import com.badlogic.gdx.utils.viewport.Viewport;
 import com.Ruinfall.frontend.visuals.CameraFollow;
+import com.Ruinfall.frontend.visuals.EffectManager;
 import com.Ruinfall.frontend.visuals.PlayerVisuals;
 import com.Ruinfall.frontend.visuals.ProceduralTextures;
 import com.Ruinfall.frontend.world.BoxRoom;
@@ -43,7 +46,7 @@ public class Main extends ApplicationAdapter {
     private PlayerVisuals visuals;
     private CameraFollow cameraFollow;
     private BoxRoom boxRoom;
-    private GrapplePoint grapplePoint;
+    private final List<GrapplePoint> grapplePoints = new ArrayList<>();
     private BulletManager bulletManager;
     private WormBoss wormBoss;
 
@@ -64,23 +67,26 @@ public class Main extends ApplicationAdapter {
         boxRoom = new BoxRoom();
         player = new PlayerController();
         bulletManager = new BulletManager();
-        wormBoss = new WormBoss(-10.0f, 10.0f, "Eater of Ruin", 300, boxRoom.getArenaBounds(), 8, 1.0f);
+        wormBoss = new WormBoss(-18.0f, 10.0f, "Eater of Ruin", 300, boxRoom.getArenaBounds(), 8, 1.0f);
 
-        // 1. Pass world coordinates: (x, y, width, height, grappleRadius)
-        grapplePoint = new GrapplePoint(0.0f, 10.2f, 0.5f, 0.5f, 5.0f);
+        // Multi-anchor grapple network across ceiling nodes, mid-air lanes, and platform undersides
+        grapplePoints.clear();
+        grapplePoints.addAll(boxRoom.createGrappleNetwork());
 
-        // Add ceiling-mounted regenerating stalactites across the arena roof
-        float[] stalactiteXs = {-10.0f, -5.0f, 0.0f, 5.0f, 10.0f};
-        for (float sx : stalactiteXs) {
+        // Add spaced-out, asynchronously randomized ceiling stalactites framing combat lanes
+        float[] stalactiteLaneXs = {-17.0f, -8.5f, 0.0f, 8.5f, 17.0f};
+        for (float sx : stalactiteLaneXs) {
             RegeneratingStalactite rs = new RegeneratingStalactite(sx, 12.5f);
+            rs.configureRandomization(1.1f, 0.25f, 0.90f, 3.5f, 7.5f, 1.6f);
             rs.setSolids(boxRoom.getBlocks());
             stalactites.add(rs);
         }
 
-        // Add destructible/explosive barrels across floor and platforms
-        breakables.add(new Barrels(-5.5f, 0.0f));
-        breakables.add(new Barrels(5.5f, 0.0f));
-        breakables.add(new Barrels(-8.5f, 2.8f));
+        // Add stationary explosive barrels anchored cleanly on floor and platform slots
+        breakables.add(new Barrels(-11.0f, 0.0f));
+        breakables.add(new Barrels(9.6f, 0.0f));
+        breakables.add(new Barrels(-15.9f, 2.8f));
+        breakables.add(new Barrels(14.5f, 2.8f));
         breakables.add(new Barrels(-0.7f, 5.6f));
 
         // Subscribe to GameEventBus to receive dropped items
@@ -101,6 +107,7 @@ public class Main extends ApplicationAdapter {
 
         visuals = new PlayerVisuals(player);
         cameraFollow = new CameraFollow(camera, player);
+        cameraFollow.setWorldBounds(boxRoom.getOuterBounds(), viewport);
 
         player.setEventListener(new PlayerController.PlayerEventListener() {
             @Override
@@ -133,21 +140,15 @@ public class Main extends ApplicationAdapter {
         float dt = Gdx.graphics.getDeltaTime();
         player.updateInput();
 
-        // 2. Single merged fixed-timestep loop
-        accumulator += Math.min(dt, 0.25f);
-        while (accumulator >= FIXED_DT) {
-            grapplePoint.update(FIXED_DT);
+        float effectiveDt = EffectManager.getInstance().getHitstop().computeEffectiveDt(dt);
 
-            // Check if player is within grapple radius
+        // 2. Single merged fixed-timestep loop
+        accumulator += Math.min(effectiveDt, 0.25f);
+        while (accumulator >= FIXED_DT) {
+            // Update grapple network & select closest in-range anchor
             float px = player.getMotor().getPosition().x;
             float py = player.getMotor().getPosition().y + player.getStats().normalColliderSize.y * 0.5f;
-            grapplePoint.checkPlayerRange(px, py);
-
-            if (grapplePoint.canGrapple()) {
-                player.setNearbyGrapplePoint(grapplePoint);
-            } else if (player.getNearbyGrapplePoint() == grapplePoint && grapplePoint.getState() != GrapplePoint.GrappleState.ACTIVE) {
-                player.setNearbyGrapplePoint(null);
-            }
+            updateGrappleNetwork(FIXED_DT, px, py);
 
             // Update stalactites & check player proximity for trigger
             for (Stalactite s : stalactites) {
@@ -190,6 +191,7 @@ public class Main extends ApplicationAdapter {
         }
 
         visuals.update(dt);
+        EffectManager.getInstance().update(dt);
         cameraFollow.update(dt);
 
         ScreenUtils.clear(0.08f, 0.10f, 0.16f, 1.0f);
@@ -198,13 +200,14 @@ public class Main extends ApplicationAdapter {
         batch.setProjectionMatrix(camera.combined);
         batch.begin();
         boxRoom.render(batch, blockTexture);
-        grapplePoint.render(batch, blockTexture);
-        grapplePoint.renderTether(
-            batch,
-            blockTexture,
-            player.getMotor().getPosition().x,
-            player.getMotor().getPosition().y + player.getStats().normalColliderSize.y * 0.5f
-        );
+        float playerCenterX = player.getMotor().getPosition().x;
+        float playerCenterY = player.getMotor().getPosition().y + player.getStats().normalColliderSize.y * 0.5f;
+        for (GrapplePoint gp : grapplePoints) {
+            gp.render(batch, blockTexture);
+        }
+        for (GrapplePoint gp : grapplePoints) {
+            gp.renderTether(batch, blockTexture, playerCenterX, playerCenterY);
+        }
 
         // Render stalactites (with grow-down scale during REGENERATING)
         for (Stalactite s : stalactites) {
@@ -227,8 +230,12 @@ public class Main extends ApplicationAdapter {
         // Render breakables (rock, barrel)
         for (Rock r : breakables) {
             if (r.isActive()) {
-                batch.setColor(r.getColor() != null ? r.getColor() : Color.DARK_GRAY);
-                batch.draw(blockTexture, r.getX(), r.getY(), r.getWidth(), r.getHeight());
+                if (r instanceof Barrels barrel) {
+                    barrel.render(batch, blockTexture);
+                } else {
+                    batch.setColor(r.getColor() != null ? r.getColor() : Color.DARK_GRAY);
+                    batch.draw(blockTexture, r.getX(), r.getY(), r.getWidth(), r.getHeight());
+                }
             }
         }
 
@@ -244,6 +251,14 @@ public class Main extends ApplicationAdapter {
         batch.setColor(Color.WHITE);
 
         visuals.render(batch, blockTexture);
+        EffectManager.getInstance().render(
+            batch,
+            ProceduralTextures.getWhitePixel(),
+            camera.position.x,
+            camera.position.y,
+            viewport.getWorldWidth(),
+            viewport.getWorldHeight()
+        );
         renderBossHpBar();
         batch.end();
     }
@@ -254,23 +269,36 @@ public class Main extends ApplicationAdapter {
         Vector2 swingHitboxPos = isSwinging ? player.getSwingState().getHitboxOffset() : null;
         Rectangle swingRect = isSwinging ? new Rectangle(swingHitboxPos.x - 0.5f, swingHitboxPos.y - 0.5f, 1.0f, 1.0f) : null;
 
-        // Player & Boss vs Stalactites
+        // Player, Boss & Barrels vs Stalactites
         for (Stalactite s : stalactites) {
             if (!s.isActive()) continue;
             if (s instanceof RegeneratingStalactite rs && rs.getState() != RegeneratingStalactite.State.FALLING) {
                 continue;
             }
             Rectangle sBounds = s.getCoreHitbox();
-            if (swingRect != null && swingRect.overlaps(sBounds)) {
+            boolean stalactiteConsumed = false;
+
+            if (swingRect != null && !player.getSwingState().hasHitThisSwing() && swingRect.overlaps(sBounds)) {
                 if (s.isPogoable()) {
                     player.getSwingState().onSwingHit(true);
                 }
             } else if (playerCore.overlaps(sBounds)) {
                 s.onCollision(player);
+                stalactiteConsumed = true;
             } else if (wormBoss != null && wormBoss.isActive() && wormBoss.isAlive()) {
                 for (Rectangle box : wormBoss.getActiveHitboxes()) {
                     if (sBounds.overlaps(box)) {
                         s.onCollision(wormBoss);
+                        stalactiteConsumed = true;
+                        break;
+                    }
+                }
+            }
+
+            if (!stalactiteConsumed) {
+                for (Rock r : breakables) {
+                    if (r.isActive() && r instanceof Barrels && sBounds.overlaps(r.getCoreHitbox())) {
+                        s.onCollision(r);
                         break;
                     }
                 }
@@ -281,9 +309,7 @@ public class Main extends ApplicationAdapter {
         for (Rock r : breakables) {
             if (!r.isActive()) continue;
             Rectangle rBounds = r.getCoreHitbox();
-            if (swingRect != null && swingRect.overlaps(rBounds)) {
-                r.onCollision(player);
-            } else if (playerCore.overlaps(rBounds)) {
+            if (swingRect != null && !player.getSwingState().hasHitThisSwing() && swingRect.overlaps(rBounds)) {
                 r.onCollision(player);
             } else if (wormBoss != null && wormBoss.isActive() && wormBoss.isAlive()) {
                 for (Rectangle box : wormBoss.getActiveHitboxes()) {
@@ -365,8 +391,24 @@ public class Main extends ApplicationAdapter {
         }
 
         for (Bullet b : bulletManager.getActiveBullets()) {
-            if (!b.isDestroyed()) {
-                batch.setColor(b.getIsPlayerBullet() ? Color.CYAN : Color.ORANGE);
+            if (b.isDestroyed()) continue;
+            if (b.getBehavior() instanceof BubbleBullet) {
+                float wobble = 1.0f + 0.14f * MathUtils.sin(b.getStateTime() * 10.0f);
+                float w = b.getWidth() * wobble;
+                float h = b.getHeight() * (2.0f - wobble);
+                batch.setColor(0.45f, 0.88f, 1.0f, 0.85f);
+                batch.draw(blockTexture, b.getX() + (b.getWidth() - w) * 0.5f, b.getY() + (b.getHeight() - h) * 0.5f, w, h);
+            } else {
+                Color base = b.getIsPlayerBullet() ? Color.CYAN : Color.ORANGE;
+                batch.setColor(base.r, base.g, base.b, 0.42f);
+                batch.draw(
+                    blockTexture,
+                    b.getX() - b.getVx() * 0.025f,
+                    b.getY() - b.getVy() * 0.025f,
+                    b.getWidth() * 0.8f,
+                    b.getHeight() * 0.8f
+                );
+                batch.setColor(base);
                 batch.draw(blockTexture, b.getX(), b.getY(), b.getWidth(), b.getHeight());
             }
         }
@@ -400,6 +442,36 @@ public class Main extends ApplicationAdapter {
         batch.setColor(stageColor);
         batch.draw(blockTexture, barX, barY, barWidth * ratio, barHeight);
         batch.setColor(Color.WHITE);
+    }
+
+    private void updateGrappleNetwork(float dt, float px, float py) {
+        GrapplePoint activeTarget = player.getGrappleState().getActiveTarget();
+        GrapplePoint bestCandidate = null;
+        float bestDistSq = Float.MAX_VALUE;
+
+        for (GrapplePoint gp : grapplePoints) {
+            gp.update(dt);
+            gp.checkPlayerRange(px, py);
+            gp.setTargeted(false);
+
+            if (gp.canGrapple()) {
+                float distSq = gp.distanceSquaredTo(px, py);
+                if (distSq < bestDistSq) {
+                    bestDistSq = distSq;
+                    bestCandidate = gp;
+                }
+            }
+        }
+
+        if (activeTarget != null && activeTarget.getState() == GrapplePoint.GrappleState.ACTIVE) {
+            activeTarget.setTargeted(true);
+            player.setNearbyGrapplePoint(activeTarget);
+        } else if (bestCandidate != null) {
+            bestCandidate.setTargeted(true);
+            player.setNearbyGrapplePoint(bestCandidate);
+        } else {
+            player.setNearbyGrapplePoint(null);
+        }
     }
 
     public void resetInteractables() {

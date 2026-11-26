@@ -2,6 +2,8 @@ package com.Ruinfall.frontend.objects.patterns.projectile;
 
 import com.Ruinfall.frontend.objects.bullets.Bullet;
 import com.Ruinfall.frontend.systems.BulletManager;
+import com.Ruinfall.frontend.systems.GameEventBus;
+import com.Ruinfall.frontend.visuals.EffectManager;
 import com.badlogic.gdx.math.MathUtils;
 import com.badlogic.gdx.math.Rectangle;
 
@@ -93,6 +95,15 @@ public class BubbleBullet implements IBulletBehavior {
         float originY = bullet.getY();
         float baseAngleDeg = diagonalBurst ? 45f : 0f;
         boolean isPlayer = bullet.getIsPlayerBullet();
+
+        GameEventBus.getInstance().publish(
+            GameEventBus.GameEvent.BUBBLE_POPPED,
+            new EffectManager.BubblePopPayload(
+                originX + bullet.getWidth() * 0.5f,
+                originY + bullet.getHeight() * 0.5f,
+                diagonalBurst
+            )
+        );
 
         for (int i = 0; i < 4; i++) {
             float angleDeg = baseAngleDeg + i * 90f;

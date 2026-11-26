@@ -5,6 +5,8 @@ import com.Ruinfall.frontend.PlayerController;
 import com.Ruinfall.frontend.core.KinematicMotor2D;
 import com.Ruinfall.frontend.data.PlayerMovementStats;
 import com.Ruinfall.frontend.objects.Interactables.GrapplePoint;
+import com.Ruinfall.frontend.systems.GameEventBus;
+import com.Ruinfall.frontend.visuals.EffectManager;
 
 public class GrappleState extends PlayerState {
     private GrapplePoint targetPoint;
@@ -50,6 +52,11 @@ public class GrappleState extends PlayerState {
             if (Math.abs(direction.x) > 0.01f) {
                 player.setFacing(direction.x > 0.0f ? 1 : -1);
             }
+            Vector2 anchor = targetPoint.getCenter();
+            GameEventBus.getInstance().publish(
+                GameEventBus.GameEvent.GRAPPLE_LATCHED,
+                new EffectManager.PointPayload(anchor.x, anchor.y)
+            );
         }
     }
 
