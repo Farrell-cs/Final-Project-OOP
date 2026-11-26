@@ -7,6 +7,7 @@ import com.Ruinfall.frontend.objects.Interactables.Stalactite;
 import com.Ruinfall.frontend.objects.enemies.WaveMantis;
 import com.Ruinfall.frontend.objects.items.Item;
 import com.Ruinfall.frontend.objects.items.ItemType;
+import com.Ruinfall.frontend.systems.AssetManager;
 import com.Ruinfall.frontend.systems.GameEventBus;
 import com.Ruinfall.frontend.visuals.CameraFollow;
 import com.Ruinfall.frontend.visuals.CaveAtmosphereRenderer;
@@ -492,6 +493,7 @@ public class Main extends ApplicationAdapter {
         vfx.dispose();
         atmosphere.dispose();
         hintRenderer.dispose();
+        AssetManager.getInstance().dispose();
         ProceduralTextures.dispose();
     }
 }
