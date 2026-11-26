@@ -1,0 +1,24 @@
+[compileJava, compileTestJava]*.options*.encoding = 'UTF-8'
+eclipse.project.name = appName + '-core'
+
+dependencies {
+  api "com.badlogicgames.gdx-controllers:gdx-controllers-core:$gdxControllersVersion"
+  api "com.badlogicgames.gdx:gdx-freetype:$gdxVersion"
+  api "com.badlogicgames.gdx:gdx:$gdxVersion"
+
+  if(enableGraalNative == 'true') {
+    implementation "io.github.berstanio:gdx-svmhelper-annotations:$graalHelperVersion"
+  }
+}
+
+tasks.register('testMovement', JavaExec) {
+  dependsOn 'compileTestJava'
+  mainClass = 'com.Ruinfall.frontend.MovementTests'
+  classpath = sourceSets.test.runtimeClasspath
+}
+
+tasks.register('testWormBoss', JavaExec) {
+  dependsOn 'compileTestJava'
+  mainClass = 'com.Ruinfall.frontend.WormBossAndProjectileTests'
+  classpath = sourceSets.test.runtimeClasspath
+}
