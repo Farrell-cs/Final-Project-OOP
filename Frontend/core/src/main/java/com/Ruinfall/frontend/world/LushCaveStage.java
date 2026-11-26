@@ -70,8 +70,13 @@ public class LushCaveStage {
         public final String name;
         public final float minX, maxX, minY, maxY;
         public final float spawnX, spawnY;
+        public final boolean singleScreen;
 
         public Room(String name, float minX, float maxX, float minY, float maxY, float spawnX, float spawnY) {
+            this(name, minX, maxX, minY, maxY, spawnX, spawnY, false);
+        }
+
+        public Room(String name, float minX, float maxX, float minY, float maxY, float spawnX, float spawnY, boolean singleScreen) {
             this.name = name;
             this.minX = minX;
             this.maxX = maxX;
@@ -79,6 +84,7 @@ public class LushCaveStage {
             this.maxY = maxY;
             this.spawnX = spawnX;
             this.spawnY = spawnY;
+            this.singleScreen = singleScreen;
         }
 
         public boolean contains(float x, float y) {
@@ -126,16 +132,19 @@ public class LushCaveStage {
     }
 
     private void buildRooms() {
-        rooms.add(new Room("Mossy Alcove", -14.0f, 16.0f, -3.0f, 14.0f, -10.5f, 5.2f));
-        rooms.add(new Room("Sunken Moss Shaft", 16.0f, 38.0f, -3.0f, 14.0f, 17.5f, 1.2f));
-        rooms.add(new Room("Reflection Lake", 38.0f, 58.0f, -3.0f, 14.0f, 35.0f, 7.6f));
-        rooms.add(new Room("Stalactite Grotto", 58.0f, 74.0f, -3.0f, 14.0f, 59.5f, 3.2f));
-        rooms.add(new Room("Wave Mantis Lair", 74.0f, 106.0f, -2.0f, 14.0f, 76.0f, 1.2f));
+        rooms.add(new Room("Mossy Alcove", -14.0f, 16.0f, -3.0f, 14.0f, -10.5f, 5.2f, false));
+        rooms.add(new Room("Sunken Moss Shaft", 16.0f, 38.0f, -2.0f, 12.0f, 17.5f, 1.2f, true));
+        rooms.add(new Room("Reflection Lake", 38.0f, 58.0f, -2.5f, 11.5f, 38.6f, 7.6f, true));
+        rooms.add(new Room("Stalactite Grotto", 58.0f, 74.0f, -1.8f, 12.2f, 59.5f, 2.5f, true));
+        rooms.add(new Room("Wave Mantis Lair", 74.0f, 106.0f, -2.0f, 14.0f, 76.0f, 1.2f, false));
     }
 
     public Room findRoomAt(float x, float y) {
         for (Room r : rooms) {
             if (r.contains(x, y)) return r;
+        }
+        for (Room r : rooms) {
+            if (x >= r.minX && x < r.maxX) return r;
         }
         return rooms.get(0);
     }
@@ -156,15 +165,13 @@ public class LushCaveStage {
         blocks.add(new SolidBlock(-14.0f, 0.0f, 7.5f, 4.5f, stoneMid));
         // Lower cavern floor under the drop
         blocks.add(new SolidBlock(-14.0f, -3.5f, 20.0f, 3.5f, stoneMid));
-        // Recessed shimmering reflective water basin (x = 4 to 13, y = -2.2 to -0.4)
-        blocks.add(new SolidBlock(6.0f, -4.5f, 8.0f, 2.0f, stoneDeep));
-        waterPools.add(new WaterPool(6.0f, -2.5f, 8.0f, 1.9f));
-        // Cozy moss-capped stepping stone over the pool
-        blocks.add(new SolidBlock(8.0f, 1.4f, 4.2f, 1.0f, stoneMid));
+        // Recessed shimmering reflective water basin (x = 6 to 14, bed top = -1.8, safe 0.54x jump-out)
+        blocks.add(new SolidBlock(6.0f, -4.5f, 8.0f, 2.7f, stoneDeep));
+        waterPools.add(new WaterPool(6.0f, -1.8f, 8.0f, 1.2f));
+        // Cozy moss-capped stepping stone over the pool (top = 2.0, <= 0.60x real vertical reach)
+        blocks.add(new SolidBlock(8.0f, 1.0f, 4.2f, 1.0f, stoneMid));
         // Exit ledge into Room 2
         blocks.add(new SolidBlock(14.0f, -3.5f, 10.0f, 3.5f, stoneMid));
-        // Small spike cluster tucked before exit ledge
-        spikes.add(new SpikeHazard(6.6f, -2.5f, 6.8f, 0.55f));
 
         // --- Room 2: Sunken Moss Shaft (Vertical climb + cozy side alcoves, 16 to 38) ---
         // Ceiling dip creating a snug shaft entrance
@@ -179,13 +186,15 @@ public class LushCaveStage {
         spikes.add(new SpikeHazard(27.2f, -1.0f, 8.8f, 0.55f));
         // Upper moss landing overlooking the Reflection Lake
         blocks.add(new SolidBlock(29.2f, 6.2f, 6.5f, 1.1f, stoneMid));
+        // Safe Room 3 entry perch inside [38.0, 58.0) (gap from 35.7 is 1.9 <= 0.25x reach)
+        blocks.add(new SolidBlock(37.6f, 6.2f, 2.2f, 1.1f, stoneMid));
 
         // --- Room 3: Reflection Lake Chasm (Dash & Grapple over shimmering lake, 38 to 58) ---
-        // Lake bed
-        blocks.add(new SolidBlock(38.0f, -4.5f, 20.0f, 2.0f, stoneDeep));
+        // Lake bed (positioned cleanly inside Room 3's locked 14-unit viewport)
+        blocks.add(new SolidBlock(38.0f, -4.2f, 20.0f, 2.0f, stoneDeep));
         // Large shimmering reflective cave lake (Reflection-inspired!)
-        waterPools.add(new WaterPool(38.0f, -2.5f, 20.0f, 2.3f));
-        spikes.add(new SpikeHazard(38.5f, -2.5f, 19.0f, 0.55f));
+        waterPools.add(new WaterPool(38.0f, -2.2f, 20.0f, 2.1f));
+        spikes.add(new SpikeHazard(38.5f, -2.2f, 19.0f, 0.55f));
         // Central mossy sanctuary island in the lake
         blocks.add(new SolidBlock(46.0f, 2.0f, 3.8f, 1.2f, stoneMid));
         // Cozy upper rock overhang
@@ -198,6 +207,8 @@ public class LushCaveStage {
         blocks.add(new SolidBlock(64.5f, -2.5f, 9.5f, 2.5f, stoneMid));
         // Shallow grotto reflection puddle
         waterPools.add(new WaterPool(65.0f, -0.3f, 5.5f, 0.45f));
+        // Sculpted grotto ceiling overhang keeping tutorial stalactite inside locked 14-unit viewport
+        blocks.add(new SolidBlock(65.5f, 11.4f, 6.0f, 2.1f, stoneDeep));
         // Low cavern arch leading into Wave Mantis Lair
         blocks.add(new SolidBlock(71.5f, 8.2f, 2.5f, 5.3f, stoneDeep));
 
@@ -222,15 +233,15 @@ public class LushCaveStage {
 
     private void buildInteractables() {
         // Grapple points across the Reflection Lake chasm
-        grapplePoints.add(new GrapplePoint(41.5f, 7.6f, 0.55f, 0.55f, 5.5f));
-        grapplePoints.add(new GrapplePoint(53.0f, 7.6f, 0.55f, 0.55f, 5.5f));
+        grapplePoints.add(new GrapplePoint(42.0f, 8.5f, 0.55f, 0.55f, 5.5f));
+        grapplePoints.add(new GrapplePoint(53.8f, 7.2f, 0.55f, 0.55f, 7.5f));
 
         // Breakables in Room 4 grotto (elevated alcove + lower floor)
         breakables.add(new Rock(61.0f, 2.2f, ItemType.LIFE));
         breakables.add(new Barrels(66.5f, 0.0f));
 
-        // Tutorial stalactite in Room 4
-        stalactites.add(StalactiteFactory.createRock(69.5f, 12.6f));
+        // Tutorial stalactite in Room 4 (anchored to sculpted ceiling overhang at y = 11.4)
+        stalactites.add(StalactiteFactory.createRock(69.5f, 10.2f));
 
         // Boss arena stalactites (3 ceiling stalactites that can be dropped on dazed Wave Mantis)
         stalactites.add(StalactiteFactory.createRock(80.5f, 12.6f));
@@ -241,7 +252,7 @@ public class LushCaveStage {
     private void buildHints() {
         hints.add(new HintZone(-9.5f, 7.6f, 7.5f, "A / D", "Move", "SPACE", "Jump"));
         hints.add(new HintZone(21.0f, 5.4f, 7.5f, "HOLD Z", "Wall Climb", "W / S", "Up / Down"));
-        hints.add(new HintZone(36.0f, 9.2f, 8.5f, "SHIFT", "Dash", "E", "Grapple"));
+        hints.add(new HintZone(38.6f, 9.2f, 8.5f, "SHIFT", "Dash", "E", "Grapple"));
         hints.add(new HintZone(61.5f, 5.4f, 7.5f, "LMB / F", "Swing", "S + F", "Pogo"));
         hints.add(new HintZone(69.5f, 6.2f, 6.2f, "LMB / F", "Drop Stalactite"));
         hints.add(new HintZone(89.0f, 10.0f, 16.0f, "LMB / F", "Parry Dash", "STALACTITE", "Crush Dazed Boss"));
@@ -270,12 +281,40 @@ public class LushCaveStage {
         }
     }
 
+    public void resetRoomInteractables(Room room) {
+        if (room == null) return;
+        for (Stalactite s : stalactites) {
+            if (s.getInitialX() >= room.minX && s.getInitialX() < room.maxX) {
+                s.reset();
+            }
+        }
+        for (Rock r : breakables) {
+            if (r.getInitialX() >= room.minX && r.getInitialX() < room.maxX) {
+                r.reset();
+            }
+        }
+    }
+
+    public void resetArena() {
+        arenaLocked = false;
+        blocks.remove(arenaLeftGate);
+        for (Stalactite s : stalactites) {
+            if (s.getInitialX() >= ARENA_MIN_X) {
+                s.reset();
+            }
+        }
+    }
+
     public List<SolidBlock> getBlocks() {
         return Collections.unmodifiableList(blocks);
     }
 
     public List<SpikeHazard> getSpikes() {
         return Collections.unmodifiableList(spikes);
+    }
+
+    public List<WaterPool> getWaterPools() {
+        return Collections.unmodifiableList(waterPools);
     }
 
     public List<GrapplePoint> getGrapplePoints() {

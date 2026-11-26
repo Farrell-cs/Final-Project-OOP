@@ -93,7 +93,10 @@ public class Item extends GameObject {
             switch (itemTypeEnum) {
                 case BOMB -> System.out.println("[Item] Collected BOMB! +1 Bomb resource");
                 case LIFE -> {
-                    System.out.println("[Item] Collected LIFE! +" + itemTypeEnum.getHpBonus() + " HP");
+                    if (player != null) {
+                        player.heal(1);
+                    }
+                    System.out.println("[Item] Collected LIFE! +1 HP");
                 }
                 case SHIELD -> System.out.println("[Item] Collected SHIELD! Shield barrier active");
                 case MANTIS_CLAW -> System.out.println("[Item] Collected MANTIS CLAW! Wall-reach upgraded");

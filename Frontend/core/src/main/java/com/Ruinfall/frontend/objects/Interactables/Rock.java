@@ -21,6 +21,9 @@ import java.util.List;
  * applying knockback and dropping items upon destruction.
  */
 public class Rock extends GameObject {
+    protected final float initialX;
+    protected final float initialY;
+    protected final int initialHealth;
     protected int health = 2;
     protected ItemType dropType;
     protected BreakBehavior breakBehavior;
@@ -42,10 +45,26 @@ public class Rock extends GameObject {
 
     public Rock(float x, float y, float width, float height, int health, ItemType dropType, Color color) {
         super(x, y, width, height, 0f, color);
+        this.initialX = x;
+        this.initialY = y;
+        this.initialHealth = health;
         this.health = health;
         this.dropType = dropType;
         this.breakBehavior = new StandardBreakBehavior();
     }
+
+    public void reset() {
+        this.active = true;
+        this.x = initialX;
+        this.y = initialY;
+        this.health = initialHealth;
+        this.knockbackVx = 0f;
+        this.knockbackVy = 0f;
+        this.drops.clear();
+    }
+
+    public float getInitialX() { return initialX; }
+    public float getInitialY() { return initialY; }
 
     @Override
     public void update(float delta) {

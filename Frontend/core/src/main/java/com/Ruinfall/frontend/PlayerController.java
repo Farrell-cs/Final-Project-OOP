@@ -56,13 +56,17 @@ public class PlayerController extends GameObject implements Player {
 
     private final Vector2 lastDashDirection = new Vector2();
     private boolean lastDashWasDemodash;
-    private final Vector2 spawnPosition = new Vector2(0.0f, 0.05f);
+    private final Vector2 spawnPosition = new Vector2(-10.5f, 5.2f);
+
+    private int maxHp = 5;
+    private int hp = 5;
 
     private int forcedMoveXDir;
     private float forcedMoveXTimer;
     private boolean wasGroundedLastStep;
     private boolean pendingAirborneUltra;
     private int pendingUltraSignX;
+    private float grappleCoastTimer;
     private GrapplePoint nearbyGrapplePoint;
 
     private PlayerEventListener listener;
@@ -189,6 +193,7 @@ public class PlayerController extends GameObject implements Player {
         }
 
         clearPendingUltra();
+        clearGrappleCoast();
         dashState.prepareDash(crouchDash[0]);
         stateMachine.changeState(dashState);
         return true;
@@ -205,6 +210,7 @@ public class PlayerController extends GameObject implements Player {
 
     public boolean tryStartSwing() {
         if (input.isSwingPressed()) {
+            clearGrappleCoast();
             stateMachine.changeState(swingState);
             return true;
         }
@@ -338,12 +344,30 @@ public class PlayerController extends GameObject implements Player {
         }
     }
 
+    public void setSpawnPosition(float x, float y) {
+        spawnPosition.set(x, y);
+    }
+
+    public Vector2 getSpawnPosition() {
+        return spawnPosition;
+    }
+
+    public void respawnAt(float x, float y) {
+        setSpawnPosition(x, y);
+        respawn();
+    }
+
     public void respawn() {
         velocity.setZero();
         cancelVarJump();
         clearPendingUltra();
+        clearGrappleCoast();
         forcedMoveXTimer = 0.0f;
         coyoteTimer = 0.0f;
+        grabCooldownTimer = 0.0f;
+        nearbyGrapplePoint = null;
+        input.consumeJumpBuffer();
+        input.consumeDashBuffer(null);
         motor.setDucking(false);
         motor.teleport(spawnPosition.x, spawnPosition.y);
         stamina.refill();
@@ -379,6 +403,23 @@ public class PlayerController extends GameObject implements Player {
         varJumpTimer = 0.0f;
     }
 
+    public void startVarJump(float speed, float duration) {
+        varJumpSpeed = speed;
+        varJumpTimer = duration;
+    }
+
+    public void startGrappleCoast(float duration) {
+        grappleCoastTimer = Math.max(grappleCoastTimer, duration);
+    }
+
+    public void clearGrappleCoast() {
+        grappleCoastTimer = 0.0f;
+    }
+
+    public boolean isGrappleCoasting() {
+        return grappleCoastTimer > 0.0f;
+    }
+
     public void markPendingAirborneUltra(int dirSignX) {
         pendingAirborneUltra = true;
         pendingUltraSignX = dirSignX;
@@ -401,10 +442,14 @@ public class PlayerController extends GameObject implements Player {
         if (grabCooldownTimer > 0.0f) {
             grabCooldownTimer = Math.max(0.0f, grabCooldownTimer - dt);
         }
+        if (grappleCoastTimer > 0.0f) {
+            grappleCoastTimer = Math.max(0.0f, grappleCoastTimer - dt);
+        }
     }
 
     private void handleHorizontalCollision() {
         clearPendingUltra();
+        clearGrappleCoast();
         velocity.x = 0.0f;
     }
 
@@ -486,8 +531,26 @@ public class PlayerController extends GameObject implements Player {
         return "Player";
     }
 
+    public int getHp() {
+        return hp;
+    }
+
+    public int getMaxHp() {
+        return maxHp;
+    }
+
+    public void heal(int amount) {
+        if (amount <= 0) return;
+        hp = Math.min(maxHp, hp + amount);
+    }
+
+    public void resetHealth() {
+        hp = maxHp;
+    }
+
     @Override
     public void takeDamage(int damage) {
-        System.out.println("Player took " + damage + " damage!");
+        if (damage <= 0) return;
+        hp = Math.max(0, hp - damage);
     }
 }

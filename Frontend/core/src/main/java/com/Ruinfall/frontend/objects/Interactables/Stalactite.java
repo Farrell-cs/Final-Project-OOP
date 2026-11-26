@@ -48,8 +48,8 @@ public abstract class Stalactite extends GameObject {
 
         if (triggered && !falling) {
             shakeTimer -= delta;
-            // Visual jitter while shaking
-            x = initialX + (float) ((Math.random() - 0.5) * 4.0);
+            // Visual jitter while shaking (world-unit scale)
+            x = initialX + (float) ((Math.random() - 0.5) * 0.14);
             if (shakeTimer <= 0f) {
                 falling = true;
                 x = initialX; // Reset to original x
@@ -117,6 +117,8 @@ public abstract class Stalactite extends GameObject {
     public boolean isTriggered() { return triggered; }
     public boolean isFalling() { return falling; }
     public float getFallSpeed() { return fallSpeed; }
+    public float getInitialX() { return initialX; }
+    public float getInitialY() { return initialY; }
     public void setFallBehavior(FallBehavior fallBehavior) { this.fallBehavior = fallBehavior; }
     public FallBehavior getFallBehavior() { return fallBehavior; }
 }

@@ -145,6 +145,10 @@ public class GrapplePoint extends GameObject {
         return centerPos;
     }
 
+    public float getGrappleRadius() {
+        return grappleRadius;
+    }
+
     public GrappleState getState() {
         return currentState;
     }

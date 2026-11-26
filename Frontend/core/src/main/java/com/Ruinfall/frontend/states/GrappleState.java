@@ -16,9 +16,9 @@ public class GrappleState extends PlayerState {
 
     // Tune these to match your PlayerMovementStats scale
     private float grapplePullSpeed = 24f;
-    private float grappleEndSpeed = 14f;
+    private float grappleEndSpeed = 17.0f;
     private float releaseDistance = 0.75f;
-    private float grappleJumpBoostY = 13f;
+    private float grappleJumpBoostY = 13.5f;
     private float maxGrappleTime = 1.2f;
 
     public GrappleState(PlayerController player, PlayerStateMachine stateMachine) {
@@ -141,20 +141,25 @@ public class GrappleState extends PlayerState {
         player.getInput().consumeJumpBuffer();
 
         Vector2 lift = player.getMotor().getClampedLiftBoost();
-        float vx = direction.x * grappleEndSpeed + lift.x;
-        float vy = Math.max(direction.y * grappleEndSpeed, grappleJumpBoostY) + lift.y;
+        float cancelSpeed = 20.0f;
+        float vx = direction.x * cancelSpeed;
+        if (Math.abs(direction.x) > 0.1f && Math.abs(vx) < 19.5f) {
+            vx = Math.signum(direction.x) * 19.5f;
+        }
+        vx += lift.x;
+        float vy = Math.max(direction.y * cancelSpeed, 18.5f) + lift.y;
 
         player.getVelocity().set(vx, vy);
+        player.startGrappleCoast(0.55f);
         transitionOut();
     }
 
     private void finishGrapple(boolean reachedTarget) {
         if (reachedTarget) {
             Vector2 endVel = new Vector2(direction).scl(grappleEndSpeed);
-            if (endVel.y >= -0.01f) {
-                endVel.y = Math.max(endVel.y, grappleJumpBoostY * 0.75f);
-            }
+            endVel.y = Math.max(endVel.y, grappleJumpBoostY * 0.85f);
             player.getVelocity().set(endVel);
+            player.startGrappleCoast(0.55f);
         } else {
             player.getVelocity().scl(0.5f);
         }

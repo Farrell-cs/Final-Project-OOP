@@ -43,9 +43,9 @@ public class Barrels extends Rock {
         Item bomb = ItemFactory.createItem(x, y, ItemType.BOMB);
         drops.add(bomb);
 
-        // Second drop: random between LIFE and POINT
+        // Second drop: random between LIFE and POINT (stays inside Room 4)
         ItemType second = (Math.random() < 0.5) ? ItemType.LIFE : ItemType.POINT;
-        Item secondItem = ItemFactory.createItem(x + 8f, y, second);
+        Item secondItem = ItemFactory.createItem(x + 0.9f, y, second);
         drops.add(secondItem);
 
         // Notify: barrel exploded (visual effect hook)

@@ -88,14 +88,19 @@ public class VfxManager {
      * invoking onRespawn cleanly at the wipe peak (~0.24s).
      */
     public void triggerDeathBurst(float worldX, float worldY, Runnable onRespawn) {
+        triggerDeathBurst(worldX, worldY, 0.42f, onRespawn);
+    }
+
+    public void triggerDeathBurst(float worldX, float worldY, float duration, Runnable onRespawn) {
         if (deathActive) return;
         this.deathActive = true;
         this.deathX = worldX;
         this.deathY = worldY;
+        this.deathDuration = Math.max(0.25f, duration);
         this.deathTimer = 0f;
         this.respawnFired = false;
         this.onDeathRespawn = onRespawn;
-        triggerScreenFlash(new Color(1.0f, 0.35f, 0.35f, 1.0f), 0.35f, 0.12f);
+        triggerScreenFlash(new Color(1.0f, 0.35f, 0.35f, 1.0f), 0.35f, 0.14f);
     }
 
     /**

@@ -1,5 +1,6 @@
 package com.Ruinfall.frontend.visuals;
 
+import com.Ruinfall.frontend.world.LushCaveStage;
 import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.graphics.Color;
 import com.badlogic.gdx.graphics.GL20;
@@ -9,16 +10,33 @@ import com.badlogic.gdx.graphics.g2d.SpriteBatch;
 import com.badlogic.gdx.graphics.glutils.ShapeRenderer;
 import com.badlogic.gdx.math.MathUtils;
 
+import java.util.ArrayList;
+import java.util.Iterator;
+import java.util.List;
+
 /**
  * Procedural Lush Mossy Caverns / Reflection-inspired background renderer (zero external assets):
  * - Deep forest-teal parallax cavern rock silhouettes & pillars
  * - Warm golden-amber diagonal light shafts filtering through ceiling cracks
  * - Glowing jade-amber cave crystals with soft pulsing halos
  * - Gently swaying mossy hanging vines from the cavern ceiling
+ * - Camera-culled Celeste-style ambient moss spores, light-shaft motes, water drips/splashes & lava embers
  */
 public class CaveAtmosphereRenderer {
 
+    private static final class CeilingDroplet {
+        float x, y, vy, targetY;
+    }
+
     private float time = 0f;
+    private float sporeAccum = 0f;
+    private float shaftMoteAccum = 0f;
+    private float mistAccum = 0f;
+    private float dripAccum = 0f;
+    private float crystalAccum = 0f;
+    private float emberAccum = 0f;
+
+    private final List<CeilingDroplet> droplets = new ArrayList<>();
     private final ShapeRenderer shapeRenderer = new ShapeRenderer();
 
     // Lush Mossy Caverns palette (deep forest teal stone + bright jade moss + warm golden-amber rays)
@@ -31,6 +49,197 @@ public class CaveAtmosphereRenderer {
 
     public void update(float dt) {
         time += dt;
+    }
+
+    public void updateParticles(float dt, OrthographicCamera camera, LushCaveStage stage, ParticleSystem particles) {
+        if (dt <= 0f || camera == null || stage == null || particles == null) return;
+
+        float camX = camera.position.x;
+        float camY = camera.position.y;
+        float halfW = camera.viewportWidth * 0.5f;
+        float halfH = camera.viewportHeight * 0.5f;
+        float left = camX - halfW - 1.5f;
+        float right = camX + halfW + 1.5f;
+        float bottom = camY - halfH - 1.5f;
+        float top = camY + halfH + 1.5f;
+
+        // 1. Bioluminescent moss spores (Rooms 1-4 and cool cavern edges)
+        if (left < 96.0f) {
+            sporeAccum += dt * 14.0f;
+            while (sporeAccum >= 1.0f) {
+                sporeAccum -= 1.0f;
+                float sx = MathUtils.random(left, Math.min(right, 96.0f));
+                float sy = MathUtils.random(Math.max(-2.0f, bottom), Math.min(12.8f, top));
+                boolean teal = MathUtils.randomBoolean(0.68f);
+                Color col = teal
+                        ? new Color(0.28f, 0.92f, 0.68f, MathUtils.random(0.38f, 0.68f))
+                        : new Color(0.55f, 0.96f, 0.52f, MathUtils.random(0.32f, 0.58f));
+                particles.emitSpore(
+                        sx, sy,
+                        MathUtils.random(-0.35f, 0.35f),
+                        MathUtils.random(0.25f, 0.75f),
+                        MathUtils.random(0.07f, 0.14f),
+                        MathUtils.random(2.2f, 3.8f),
+                        col
+                );
+            }
+        }
+
+        // 2. Warm golden dust motes drifting through visible light shafts
+        shaftMoteAccum += dt * 9.0f;
+        while (shaftMoteAccum >= 1.0f) {
+            shaftMoteAccum -= 1.0f;
+            int startRay = (int) Math.floor(left / 14.0f) - 1;
+            int endRay = (int) Math.ceil(right / 14.0f) + 1;
+            if (endRay >= startRay) {
+                int rayIdx = MathUtils.random(startRay, endRay);
+                float topX = rayIdx * 14.0f + MathUtils.sin(rayIdx * 2.9f) * 3.0f;
+                float tY = MathUtils.random(0.05f, 0.92f);
+                float mx = topX + tY * 4.5f + MathUtils.random(-0.2f, 2.2f);
+                if (mx >= left && mx <= right) {
+                    float my = MathUtils.lerp(13.2f, -1.5f, tY);
+                    particles.emitSpore(
+                            mx, my,
+                            MathUtils.random(-0.2f, 0.3f),
+                            MathUtils.random(-0.18f, 0.25f),
+                            MathUtils.random(0.06f, 0.12f),
+                            MathUtils.random(2.0f, 3.4f),
+                            new Color(1.0f, 0.88f, 0.48f, MathUtils.random(0.30f, 0.56f))
+                    );
+                }
+            }
+        }
+
+        // 3. WaterPool surface shimmer mist + ceiling droplet spawns
+        List<LushCaveStage.WaterPool> visiblePools = new ArrayList<>();
+        for (LushCaveStage.WaterPool pool : stage.getWaterPools()) {
+            if (pool.x + pool.width >= left && pool.x <= right) {
+                visiblePools.add(pool);
+            }
+        }
+
+        if (!visiblePools.isEmpty()) {
+            mistAccum += dt * 8.0f;
+            while (mistAccum >= 1.0f) {
+                mistAccum -= 1.0f;
+                LushCaveStage.WaterPool pool = visiblePools.get(MathUtils.random(visiblePools.size() - 1));
+                float mx = MathUtils.random(Math.max(pool.x + 0.2f, left), Math.min(pool.x + pool.width - 0.2f, right));
+                float surfaceY = pool.y + pool.height;
+                particles.spawnFull(
+                        mx, surfaceY + 0.04f,
+                        MathUtils.random(-0.25f, 0.25f), MathUtils.random(0.35f, 0.80f),
+                        0f, 0.1f, 0.8f,
+                        MathUtils.random(1.0f, 1.8f),
+                        MathUtils.random(0.10f, 0.18f), 0.03f,
+                        1.0f, 45f, 0f,
+                        new Color(0.42f, 0.94f, 0.82f, 0.42f),
+                        new Color(0.65f, 1.0f, 0.92f, 0.0f),
+                        0.28f, 2.5f, true, ParticleSystem.Shape.DIAMOND
+                );
+            }
+
+            dripAccum += dt * 2.2f;
+            while (dripAccum >= 1.0f) {
+                dripAccum -= 1.0f;
+                LushCaveStage.WaterPool pool = visiblePools.get(MathUtils.random(visiblePools.size() - 1));
+                float dx = MathUtils.random(Math.max(pool.x + 0.4f, left), Math.min(pool.x + pool.width - 0.4f, right));
+                CeilingDroplet d = new CeilingDroplet();
+                d.x = dx;
+                d.y = Math.min(top, 11.4f);
+                d.vy = -1.2f;
+                d.targetY = pool.y + pool.height;
+                if (d.y > d.targetY + 1.5f) {
+                    droplets.add(d);
+                }
+            }
+        }
+
+        // Update falling ceiling water droplets & emit splash on pool impact
+        Iterator<CeilingDroplet> it = droplets.iterator();
+        while (it.hasNext()) {
+            CeilingDroplet d = it.next();
+            d.vy -= 18.0f * dt;
+            d.y += d.vy * dt;
+            particles.spawn(
+                    d.x, d.y,
+                    0f, d.vy * 0.15f,
+                    0f, 0f, 0f,
+                    0.06f, 0.07f, 0.03f,
+                    new Color(0.58f, 0.95f, 0.92f, 0.72f),
+                    new Color(0.58f, 0.95f, 0.92f, 0.0f),
+                    false, ParticleSystem.Shape.STREAK
+            );
+            if (d.y <= d.targetY) {
+                for (int s = 0; s < 5; s++) {
+                    float svx = MathUtils.random(-2.2f, 2.2f);
+                    float svy = MathUtils.random(1.4f, 3.2f);
+                    particles.spawn(
+                            d.x, d.targetY + 0.03f,
+                            svx, svy,
+                            0f, -18.0f, 1.0f,
+                            MathUtils.random(0.22f, 0.36f),
+                            0.08f, 0.02f,
+                            new Color(0.65f, 0.98f, 0.92f, 0.85f),
+                            new Color(0.32f, 0.85f, 0.78f, 0.0f),
+                            true, ParticleSystem.Shape.DIAMOND
+                    );
+                }
+                it.remove();
+            }
+        }
+
+        // 4. Crystal cluster ambient sparkles
+        crystalAccum += dt * 6.0f;
+        while (crystalAccum >= 1.0f) {
+            crystalAccum -= 1.0f;
+            int startCrys = (int) Math.floor(left / 12.0f) - 1;
+            int endCrys = (int) Math.ceil(right / 12.0f) + 1;
+            if (endCrys >= startCrys) {
+                int i = MathUtils.random(startCrys, endCrys);
+                float cx = i * 12.0f + MathUtils.sin(i * 4.3f) * 2.2f + MathUtils.random(-0.4f, 0.5f);
+                float cy = Math.abs(MathUtils.cos(i * 2.7f)) * 2.0f + MathUtils.random(0.2f, 1.4f);
+                if (cx >= left && cx <= right) {
+                    particles.emitSpark(
+                            cx, cy,
+                            MathUtils.random(-0.3f, 0.3f), MathUtils.random(0.4f, 1.1f),
+                            MathUtils.random(0.07f, 0.13f),
+                            MathUtils.random(0.45f, 0.85f),
+                            new Color(0.55f, 1.0f, 0.82f, 0.85f),
+                            new Color(1.0f, 0.86f, 0.38f, 0.0f),
+                            false
+                    );
+                }
+            }
+        }
+
+        // 5. Room 5 / Lava Shaft rising embers & tense boss-lair heat motes
+        if (right >= 74.0f) {
+            float emberRate = (right >= LushCaveStage.LAVA_SHAFT_X - 2.0f) ? 24.0f : 7.0f;
+            emberAccum += dt * emberRate;
+            while (emberAccum >= 1.0f) {
+                emberAccum -= 1.0f;
+                boolean inShaft = (right >= LushCaveStage.LAVA_SHAFT_X - 1.0f) && MathUtils.randomBoolean(0.75f);
+                float ex = inShaft
+                        ? MathUtils.random(LushCaveStage.LAVA_SHAFT_X - 0.5f, LushCaveStage.LAVA_SHAFT_X + LushCaveStage.LAVA_SHAFT_WIDTH)
+                        : MathUtils.random(Math.max(74.0f, left), right);
+                float ey = inShaft
+                        ? (stage.isLavaShaftOpen() ? MathUtils.random(-8.5f, 0.5f) : MathUtils.random(-0.2f, 2.5f))
+                        : MathUtils.random(Math.max(-1.0f, bottom), 5.0f);
+                boolean crimson = MathUtils.randomBoolean(0.32f);
+                Color startCol = crimson
+                        ? new Color(1.0f, 0.32f, 0.14f, MathUtils.random(0.65f, 0.95f))
+                        : new Color(1.0f, 0.72f, 0.22f, MathUtils.random(0.60f, 0.90f));
+                Color endCol = new Color(1.0f, 0.25f, 0.05f, 0.0f);
+                particles.emitEmber(
+                        ex, ey,
+                        MathUtils.random(-0.6f, 0.6f),
+                        inShaft ? MathUtils.random(2.0f, 4.4f) : MathUtils.random(0.9f, 2.2f),
+                        MathUtils.random(0.08f, 0.17f),
+                        MathUtils.random(1.4f, 2.9f),
+                        startCol, endCol
+                );
+            }
+        }
     }
 
     public void render(SpriteBatch batch, Texture blockTexture, OrthographicCamera camera) {

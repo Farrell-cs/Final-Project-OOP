@@ -28,17 +28,13 @@ public class CrystalStalactite extends Stalactite {
 
     @Override
     public void onEntityHit(GameObject entity) {
-        if (!active) return;
+        if (!active || !falling) return;
 
         System.out.println("[CrystalStalactite] Hit entity: " + entity.getClass().getSimpleName());
 
-        if (entity instanceof PlayerController player) {
-            player.takeDamage(1);
-            player.getVelocity().set(player.getVelocity().x * 0.5f, 0);
-        }
-
         Item drop = ItemFactory.createItem(x, y, ItemType.SHIELD);
         GameEventBus.getInstance().publish(GameEventBus.GameEvent.CRYSTAL_SHATTERED, drop);
+        GameEventBus.getInstance().publish(GameEventBus.GameEvent.STALACTITE_LANDED, this);
         destroy();
     }
 
@@ -50,6 +46,7 @@ public class CrystalStalactite extends Stalactite {
         ItemType dropType = Math.random() < 0.5 ? ItemType.SHIELD : ItemType.MANTIS_CLAW;
         Item drop = ItemFactory.createItem(x, y, dropType);
         GameEventBus.getInstance().publish(GameEventBus.GameEvent.CRYSTAL_SHATTERED, drop);
+        GameEventBus.getInstance().publish(GameEventBus.GameEvent.STALACTITE_LANDED, this);
         destroy();
     }
 

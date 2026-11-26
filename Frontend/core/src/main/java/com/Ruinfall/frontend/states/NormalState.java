@@ -46,6 +46,7 @@ public class NormalState extends PlayerState {
         boolean grounded = motor.isGrounded();
         if (grounded) {
             wallSlideTimer = stats.wallSlideTime;
+            player.clearGrappleCoast();
         }
 
         handleDucking(grounded, input.getMoveY());
@@ -65,6 +66,10 @@ public class NormalState extends PlayerState {
 
         if (motor.isDucking() && grounded) {
             float nextVx = MovementMath.approach(player.getVelocity().x, 0.0f, stats.duckFriction * dt);
+            player.getVelocity().x = nextVx;
+        } else if (!grounded && effectiveMoveX == 0 && player.isGrappleCoasting()) {
+            // Preserve grapple launch momentum during neutral-input air coast until landed or steered
+            float nextVx = MovementMath.approach(player.getVelocity().x, 0.0f, stats.runReduce * 0.12f * dt);
             player.getVelocity().x = nextVx;
         } else {
             float nextVx = MovementMath.computeHorizontalVelocity(
@@ -155,12 +160,14 @@ public class NormalState extends PlayerState {
 
         int checkPrimary = player.getInput().getMoveX() != 0 ? player.getInput().getMoveX() : player.getFacingDirection();
         if (player.getMotor().checkWall(checkPrimary, 0.08f)) {
+            player.clearGrappleCoast();
             player.setFacing(checkPrimary);
             stateMachine.changeState(player.getClimbState());
             return true;
         }
 
         if (player.getMotor().checkWall(player.getFacingDirection(), 0.08f)) {
+            player.clearGrappleCoast();
             stateMachine.changeState(player.getClimbState());
             return true;
         }

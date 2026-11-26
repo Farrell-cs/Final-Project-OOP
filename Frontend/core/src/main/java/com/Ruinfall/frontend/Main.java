@@ -7,10 +7,12 @@ import com.Ruinfall.frontend.objects.Interactables.Stalactite;
 import com.Ruinfall.frontend.objects.enemies.WaveMantis;
 import com.Ruinfall.frontend.objects.items.Item;
 import com.Ruinfall.frontend.objects.items.ItemType;
+import com.Ruinfall.frontend.states.SwingState;
 import com.Ruinfall.frontend.systems.AssetManager;
 import com.Ruinfall.frontend.systems.GameEventBus;
 import com.Ruinfall.frontend.visuals.CameraFollow;
 import com.Ruinfall.frontend.visuals.CaveAtmosphereRenderer;
+import com.Ruinfall.frontend.visuals.ParticleSystem;
 import com.Ruinfall.frontend.visuals.PlayerVisuals;
 import com.Ruinfall.frontend.visuals.ProceduralTextures;
 import com.Ruinfall.frontend.visuals.VfxManager;
@@ -22,6 +24,7 @@ import com.badlogic.gdx.graphics.Color;
 import com.badlogic.gdx.graphics.OrthographicCamera;
 import com.badlogic.gdx.graphics.Texture;
 import com.badlogic.gdx.graphics.g2d.SpriteBatch;
+import com.badlogic.gdx.math.MathUtils;
 import com.badlogic.gdx.math.Rectangle;
 import com.badlogic.gdx.math.Vector2;
 import com.badlogic.gdx.utils.ScreenUtils;
@@ -30,6 +33,7 @@ import com.badlogic.gdx.utils.viewport.Viewport;
 
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 
@@ -48,6 +52,7 @@ public class Main extends ApplicationAdapter {
     private LushCaveStage stage;
     private WaveMantis waveMantis;
     private VfxManager vfx;
+    private ParticleSystem particles;
     private CaveAtmosphereRenderer atmosphere;
     private WorldHintRenderer hintRenderer;
 
@@ -56,8 +61,13 @@ public class Main extends ApplicationAdapter {
 
     private float accumulator;
     private float playerHurtCooldown = 0f;
+    private float bossParticleTimer = 0f;
+    private float stalactiteDustTimer = 0f;
+    private boolean wasGrappling = false;
+    private GrapplePoint lastEngagedGrapple = null;
+    private boolean handlingControlledRespawn = false;
 
-    // Banner state for boss defeat / reward pickup
+    // Banner state for boss defeat / reward pickup / retry
     private String bannerTitle = "";
     private String bannerSubtitle = "";
     private float bannerTimer = 0f;
@@ -73,44 +83,113 @@ public class Main extends ApplicationAdapter {
 
         stage = new LushCaveStage();
         player = new PlayerController();
-        player.getMotor().getPosition().set(-10.5f, 5.2f);
+        LushCaveStage.Room startRoom = stage.findRoomAt(-10.5f, 5.2f);
+        player.getMotor().getPosition().set(startRoom.spawnX, startRoom.spawnY);
+        player.setSpawnPosition(startRoom.spawnX, startRoom.spawnY);
+        player.resetHealth();
         player.getMotor().setSolids(stage.getBlocks());
 
         waveMantis = new WaveMantis(92.0f, 0.0f);
         vfx = new VfxManager();
+        particles = new ParticleSystem();
         atmosphere = new CaveAtmosphereRenderer();
         hintRenderer = new WorldHintRenderer();
 
         // Subscribe to GameEventBus
         GameEventBus bus = GameEventBus.getInstance();
         bus.subscribe(GameEventBus.GameEvent.ROCK_SHATTERED, (event, payload) -> {
-            if (payload instanceof Item item) activeItems.add(item);
+            if (payload instanceof Item item) {
+                activeItems.add(item);
+                emitShatterBurst(item.getX() + 0.3f, item.getY() + 0.3f, new Color(0.55f, 0.58f, 0.54f, 0.9f), 12);
+            }
         });
         bus.subscribe(GameEventBus.GameEvent.CRYSTAL_SHATTERED, (event, payload) -> {
-            if (payload instanceof Item item) activeItems.add(item);
+            if (payload instanceof Item item) {
+                activeItems.add(item);
+                emitSparkBurst(item.getX() + 0.3f, item.getY() + 0.3f, new Color(0.35f, 0.96f, 0.92f, 1f), Color.WHITE, 16);
+            }
+        });
+        bus.subscribe(GameEventBus.GameEvent.STALACTITE_TRIGGERED, (event, payload) -> {
+            if (payload instanceof Stalactite s) {
+                emitShatterBurst(s.getX() + s.getWidth() * 0.5f, s.getY() + s.getHeight() * 0.8f,
+                        new Color(0.52f, 0.60f, 0.56f, 0.85f), 6);
+            }
+        });
+        bus.subscribe(GameEventBus.GameEvent.STALACTITE_LANDED, (event, payload) -> {
+            if (payload instanceof Stalactite s) {
+                emitShatterBurst(s.getX() + s.getWidth() * 0.5f, Math.max(0.1f, s.getY()),
+                        new Color(0.45f, 0.52f, 0.48f, 0.95f), 14);
+            }
         });
         bus.subscribe(GameEventBus.GameEvent.ROCK_BROKEN, (event, payload) -> {
-            if (payload instanceof Rock rock) activeItems.addAll(rock.getDrops());
+            if (payload instanceof String hitInfo && hitInfo.startsWith("hit:")) {
+                String[] parts = hitInfo.substring(4).split(",");
+                if (parts.length == 2) {
+                    try {
+                        float hx = Float.parseFloat(parts[0]) + 0.6f;
+                        float hy = Float.parseFloat(parts[1]) + 0.6f;
+                        emitShatterBurst(hx, hy, new Color(0.58f, 0.62f, 0.56f, 0.9f), 6);
+                    } catch (NumberFormatException ignored) {}
+                }
+            } else if (payload instanceof Rock rock) {
+                activeItems.addAll(rock.getDrops());
+                emitShatterBurst(rock.getX() + rock.getWidth() * 0.5f, rock.getY() + rock.getHeight() * 0.5f,
+                        new Color(0.54f, 0.58f, 0.52f, 0.95f), 16);
+            }
         });
         bus.subscribe(GameEventBus.GameEvent.BARREL_EXPLODED, (event, payload) -> {
-            if (payload instanceof Barrels.BarrelExplosionPayload p) activeItems.addAll(p.items);
+            if (payload instanceof Barrels.BarrelExplosionPayload p) {
+                activeItems.addAll(p.items);
+                emitShatterBurst(p.x + 0.7f, p.y + 0.8f, new Color(0.62f, 0.42f, 0.20f, 0.95f), 14);
+                emitSparkBurst(p.x + 0.7f, p.y + 0.8f, new Color(1.0f, 0.62f, 0.18f, 1f), new Color(1.0f, 0.25f, 0.08f, 0f), 16);
+            }
+        });
+        bus.subscribe(GameEventBus.GameEvent.SWING_EXECUTED, (event, payload) -> {
+            if (payload instanceof SwingState swing) {
+                Vector2 pos = swing.getHitboxOffset();
+                Vector2 dir = swing.getSwingVector();
+                float baseAngle = MathUtils.atan2(dir.y, dir.x);
+                for (int i = 0; i < 7; i++) {
+                    float angle = baseAngle + MathUtils.random(-0.75f, 0.75f);
+                    float spd = MathUtils.random(3.5f, 8.0f);
+                    particles.emitSpark(
+                            pos.x + MathUtils.random(-0.25f, 0.25f),
+                            pos.y + MathUtils.random(-0.25f, 0.25f),
+                            MathUtils.cos(angle) * spd, MathUtils.sin(angle) * spd,
+                            MathUtils.random(0.10f, 0.17f),
+                            MathUtils.random(0.14f, 0.24f),
+                            new Color(1.0f, 0.95f, 0.45f, 0.95f),
+                            new Color(1.0f, 1.0f, 1.0f, 0f),
+                            true
+                    );
+                }
+            }
+        });
+        bus.subscribe(GameEventBus.GameEvent.POGO_BOUNCE, (event, payload) -> {
+            float ppx = player.getMotor().getPosition().x;
+            float ppy = player.getMotor().getPosition().y;
+            emitSparkBurst(ppx, ppy, new Color(1.0f, 0.92f, 0.42f, 1f), new Color(0.42f, 0.96f, 0.95f, 0f), 12);
         });
         bus.subscribe(GameEventBus.GameEvent.BOSS_SHOCKWAVE, (event, payload) -> {
             if (payload instanceof WaveMantis boss) {
                 cameraFollow.addTrauma(0.38f);
                 vfx.triggerImpactRing(boss.getCenterX(), 0.4f, new Color(0.3f, 0.95f, 0.85f, 1f), 4.2f, 0.35f);
+                emitSparkBurst(boss.getCenterX(), 0.4f, new Color(0.32f, 0.96f, 0.88f, 1f), Color.WHITE, 14);
             }
         });
         bus.subscribe(GameEventBus.GameEvent.BOSS_PARRIED, (event, payload) -> {
             if (payload instanceof WaveMantis boss) {
                 vfx.triggerParryFlash(boss.getCenterX(), boss.getCenterY());
                 cameraFollow.addTrauma(0.68f);
+                emitSparkBurst(boss.getCenterX(), boss.getCenterY(), new Color(1.0f, 0.92f, 0.42f, 1f), Color.WHITE, 26);
             }
         });
         bus.subscribe(GameEventBus.GameEvent.BOSS_DAZED, (event, payload) -> {
             if (payload instanceof WaveMantis boss) {
                 cameraFollow.addTrauma(0.55f);
                 vfx.triggerImpactRing(boss.getCenterX(), boss.getCenterY(), new Color(0.85f, 0.65f, 1.0f, 1f), 3.0f, 0.3f);
+                emitShatterBurst(boss.getCenterX(), boss.getCenterY(), new Color(0.45f, 0.52f, 0.48f, 0.9f), 12);
+                emitSparkBurst(boss.getCenterX(), boss.getCenterY(), new Color(0.85f, 0.68f, 1.0f, 1f), new Color(1f, 0.95f, 0.45f, 0f), 14);
             }
         });
         bus.subscribe(GameEventBus.GameEvent.BOSS_DEFEATED, (event, payload) -> {
@@ -119,6 +198,7 @@ public class Main extends ApplicationAdapter {
                 vfx.triggerScreenFlash(new Color(1.0f, 0.95f, 0.7f, 1.0f), 0.65f, 0.35f);
                 vfx.triggerImpactRing(boss.getCenterX(), boss.getCenterY(), Color.GOLD, 6.0f, 0.5f);
                 cameraFollow.addTrauma(1.0f);
+                emitSparkBurst(boss.getCenterX(), boss.getCenterY(), Color.GOLD, new Color(0.38f, 0.96f, 0.72f, 0f), 38);
 
                 // Drop MANTIS_CLAW reward & open Lava Shaft
                 activeItems.add(new Item(boss.getCenterX() - 0.3f, 1.4f, ItemType.MANTIS_CLAW));
@@ -128,17 +208,24 @@ public class Main extends ApplicationAdapter {
             }
         });
         bus.subscribe(GameEventBus.GameEvent.ITEM_COLLECTED, (event, payload) -> {
-            if (payload instanceof Item item && item.getItemTypeEnum() == ItemType.MANTIS_CLAW) {
-                vfx.triggerHitStop(0.08f);
-                vfx.triggerScreenFlash(new Color(0.45f, 1.0f, 0.78f, 1.0f), 0.45f, 0.3f);
-                cameraFollow.addTrauma(0.4f);
-                showBanner("MANTIS CLAW ACQUIRED", "LAVA SHAFT UNSEALED - DROP DOWN TO CONTINUE", 4.5f);
+            if (payload instanceof Item item) {
+                Color c = (item.getItemTypeEnum() == ItemType.MANTIS_CLAW)
+                        ? new Color(0.35f, 1.0f, 0.72f, 1.0f)
+                        : (item.getItemTypeEnum() == ItemType.LIFE ? new Color(1.0f, 0.42f, 0.52f, 1.0f) : Color.GOLD);
+                emitSparkBurst(item.getX() + 0.3f, item.getY() + 0.3f, c, Color.WHITE, 16);
+                if (item.getItemTypeEnum() == ItemType.MANTIS_CLAW) {
+                    vfx.triggerHitStop(0.08f);
+                    vfx.triggerScreenFlash(new Color(0.45f, 1.0f, 0.78f, 1.0f), 0.45f, 0.3f);
+                    cameraFollow.addTrauma(0.4f);
+                    showBanner("MANTIS CLAW ACQUIRED", "LAVA SHAFT UNSEALED - DROP DOWN TO CONTINUE", 4.5f);
+                }
             }
         });
 
         visuals = new PlayerVisuals(player);
+        visuals.setParticles(particles);
         cameraFollow = new CameraFollow(camera, player);
-        cameraFollow.setInitialRoom(stage.findRoomAt(-10.5f, 5.2f));
+        cameraFollow.setInitialRoom(startRoom);
 
         player.setEventListener(new PlayerController.PlayerEventListener() {
             @Override
@@ -165,6 +252,23 @@ public class Main extends ApplicationAdapter {
 
             @Override
             public void onRespawned() {
+                if (!handlingControlledRespawn) {
+                    float rpx = player.getMotor().getPosition().x;
+                    float rpy = player.getMotor().getPosition().y + player.getStats().normalColliderSize.y * 0.5f;
+                    LushCaveStage.Room room = stage.findRoomAt(rpx, rpy);
+                    resetRoomState(room);
+                    if (room != null && room.minX >= LushCaveStage.ARENA_MIN_X && waveMantis.isAlive()
+                            && waveMantis.getState() != WaveMantis.State.DEFEATED) {
+                        waveMantis.reset();
+                        stage.resetArena();
+                        player.getMotor().setSolids(stage.getBlocks());
+                        player.resetHealth();
+                        playerHurtCooldown = 0f;
+                    }
+                    if (room != null && room != cameraFollow.getCurrentRoom()) {
+                        cameraFollow.setInitialRoom(room);
+                    }
+                }
                 visuals.onRespawned();
                 cameraFollow.snapToTarget();
             }
@@ -181,7 +285,9 @@ public class Main extends ApplicationAdapter {
     @Override
     public void render() {
         float dt = Gdx.graphics.getDeltaTime();
-        player.updateInput();
+        if (!vfx.isDeathActive()) {
+            player.updateInput();
+        }
 
         if (bannerTimer > 0f) {
             bannerTimer = Math.max(0f, bannerTimer - dt);
@@ -202,6 +308,8 @@ public class Main extends ApplicationAdapter {
         vfx.update(dt);
         stage.update(dt);
         atmosphere.update(dt);
+        atmosphere.updateParticles(dt, camera, stage, particles);
+        particles.update(dt);
         hintRenderer.update(dt);
         visuals.update(dt);
         cameraFollow.update(dt);
@@ -261,6 +369,10 @@ public class Main extends ApplicationAdapter {
         if (!vfx.isDeathActive()) {
             visuals.render(batch, blockTexture);
         }
+
+        // Render pooled procedural Celeste-style particles (spores, dust, sparks, embers)
+        particles.render(batch, camera);
+
         batch.end();
 
         // Warm golden-amber diagonal light shafts across the mossy cavern
@@ -271,6 +383,15 @@ public class Main extends ApplicationAdapter {
 
         // Render world-space tutorial hints
         hintRenderer.render(batch, camera, stage.getHints(), px, py);
+
+        // Render Player HP & Boss HP HUD
+        boolean bossAwake = waveMantis.isAlive() && waveMantis.getState() != WaveMantis.State.SLEEPING;
+        hintRenderer.renderHud(
+                batch,
+                player.getHp(), player.getMaxHp(),
+                player.getDashes().getCurrentDashes(), player.getDashes().getMaxDashes(),
+                bossAwake, waveMantis.getHp(), waveMantis.getMaxHP(), waveMantis.getName()
+        );
 
         // Render banner if active
         if (bannerTimer > 0f) {
@@ -286,10 +407,13 @@ public class Main extends ApplicationAdapter {
         float px = player.getMotor().getPosition().x;
         float py = player.getMotor().getPosition().y + player.getStats().normalColliderSize.y * 0.5f;
 
-        // Discrete Celeste room transition check
+        // Discrete Celeste room transition check & spawn sync
         LushCaveStage.Room currentRoom = stage.findRoomAt(px, py);
-        if (currentRoom != cameraFollow.getCurrentRoom()) {
-            cameraFollow.transitionToRoom(currentRoom);
+        if (currentRoom != null) {
+            player.setSpawnPosition(currentRoom.spawnX, currentRoom.spawnY);
+            if (currentRoom != cameraFollow.getCurrentRoom()) {
+                cameraFollow.transitionToRoom(currentRoom);
+            }
         }
 
         // Trigger boss arena when player steps inside
@@ -322,10 +446,29 @@ public class Main extends ApplicationAdapter {
             player.setNearbyGrapplePoint(null);
         }
 
-        // Update stalactites & respawn arena stalactites while boss is alive
+        // Track grapple latch & release particle bursts
+        boolean isGrappling = player.getStateMachine().getCurrentState() == player.getGrappleState();
+        if (isGrappling && !wasGrappling) {
+            lastEngagedGrapple = player.getGrappleState().getActiveTarget();
+            emitSparkBurst(px, py, new Color(0.32f, 0.96f, 1.0f, 1f), Color.WHITE, 12);
+            if (lastEngagedGrapple != null) {
+                emitSparkBurst(lastEngagedGrapple.getCenter().x, lastEngagedGrapple.getCenter().y,
+                        new Color(1.0f, 0.92f, 0.42f, 1f), new Color(0.32f, 0.96f, 1.0f, 0f), 10);
+            }
+        } else if (!isGrappling && wasGrappling) {
+            emitSparkBurst(px, py, new Color(0.55f, 1.0f, 0.85f, 1f), Color.WHITE, 10);
+            lastEngagedGrapple = null;
+        }
+        wasGrappling = isGrappling;
+
+        // Update stalactites, warning dust trickle & respawn arena stalactites while boss is alive
+        stalactiteDustTimer -= dt;
+        boolean emitStalactiteDust = stalactiteDustTimer <= 0f;
+        if (emitStalactiteDust) stalactiteDustTimer = 0.055f;
+
         for (Stalactite s : stage.getStalactites()) {
             if (!s.isActive()) {
-                if (s.getX() >= LushCaveStage.ARENA_MIN_X && waveMantis.isAlive()) {
+                if (s.getInitialX() >= LushCaveStage.ARENA_MIN_X && waveMantis.isAlive()) {
                     float timer = arenaStalactiteRespawnTimers.getOrDefault(s, 4.5f) - dt;
                     if (timer <= 0f) {
                         s.reset();
@@ -340,6 +483,15 @@ public class Main extends ApplicationAdapter {
                 s.trigger();
             }
             s.update(dt);
+            if (emitStalactiteDust && s.isTriggered() && !s.isFalling()) {
+                particles.emitDust(
+                        s.getX() + MathUtils.random(0.05f, s.getWidth() - 0.05f),
+                        s.getY(),
+                        MathUtils.random(-0.5f, 0.5f), MathUtils.random(-2.2f, -0.8f),
+                        MathUtils.random(0.10f, 0.16f), MathUtils.random(0.25f, 0.42f),
+                        new Color(0.55f, 0.62f, 0.58f, 0.78f)
+                );
+            }
         }
 
         // Update breakables
@@ -356,8 +508,9 @@ public class Main extends ApplicationAdapter {
             }
         }
 
-        // Update Wave Mantis
+        // Update Wave Mantis & emit boss state particles
         waveMantis.updateBoss(dt, px, py);
+        emitWaveMantisParticles(dt);
 
         // Update player physics
         player.stepPhysics(dt);
@@ -372,6 +525,63 @@ public class Main extends ApplicationAdapter {
         checkCollisions();
     }
 
+    private void emitWaveMantisParticles(float dt) {
+        if (!waveMantis.isAlive() || waveMantis.getState() == WaveMantis.State.SLEEPING) return;
+
+        bossParticleTimer -= dt;
+        boolean tick = bossParticleTimer <= 0f;
+        if (tick) bossParticleTimer = 0.045f;
+
+        WaveMantis.State st = waveMantis.getState();
+        if (tick) {
+            if (st == WaveMantis.State.DASH_WINDUP) {
+                float angle = MathUtils.random(0f, MathUtils.PI2);
+                float dist = MathUtils.random(1.2f, 2.4f);
+                float sx = waveMantis.getCenterX() + MathUtils.cos(angle) * dist;
+                float sy = waveMantis.getCenterY() + MathUtils.sin(angle) * dist;
+                particles.emitSpark(
+                        sx, sy,
+                        (waveMantis.getCenterX() - sx) * 3.5f, (waveMantis.getCenterY() - sy) * 3.5f,
+                        MathUtils.random(0.11f, 0.18f), 0.25f,
+                        new Color(1.0f, 0.85f, 0.28f, 0.95f), Color.WHITE, true
+                );
+            } else if (st == WaveMantis.State.DASH_ATTACK) {
+                for (int i = 0; i < 2; i++) {
+                    particles.emitSpark(
+                            waveMantis.getCenterX() + MathUtils.random(-0.5f, 0.5f),
+                            waveMantis.getY() + MathUtils.random(0.2f, waveMantis.getHeight() - 0.2f),
+                            MathUtils.random(-3.5f, 3.5f), MathUtils.random(0.5f, 2.5f),
+                            MathUtils.random(0.13f, 0.22f), 0.24f,
+                            new Color(1.0f, 0.48f, 0.18f, 0.95f), new Color(1.0f, 0.90f, 0.35f, 0f),
+                            true
+                    );
+                }
+            } else if (st == WaveMantis.State.DAZED) {
+                float orbitAngle = (System.nanoTime() * 1e-9f) * 6.5f;
+                float ox = waveMantis.getCenterX() + MathUtils.cos(orbitAngle) * 0.85f;
+                float oy = waveMantis.getY() + waveMantis.getHeight() + 0.45f + MathUtils.sin(orbitAngle) * 0.18f;
+                particles.emitSpark(
+                        ox, oy,
+                        MathUtils.random(-0.4f, 0.4f), MathUtils.random(0.4f, 1.0f),
+                        MathUtils.random(0.10f, 0.16f), 0.26f,
+                        new Color(1.0f, 0.94f, 0.38f, 0.95f), new Color(0.78f, 0.55f, 1.0f, 0f),
+                        false
+                );
+            }
+
+            // Trailing ground sparks behind active shockwaves
+            for (WaveMantis.Shockwave sw : waveMantis.getShockwaves()) {
+                if (!sw.active) continue;
+                particles.emitSpark(
+                        sw.x + sw.width * 0.5f, sw.y + 0.18f,
+                        -Math.signum(sw.vx) * MathUtils.random(1.0f, 3.0f), MathUtils.random(1.2f, 3.4f),
+                        MathUtils.random(0.10f, 0.17f), 0.25f,
+                        new Color(0.32f, 0.96f, 0.88f, 0.95f), Color.WHITE, true
+                );
+            }
+        }
+    }
+
     private void checkCollisions() {
         Rectangle playerCore = player.getCoreHitbox();
         boolean isSwinging = player.getStateMachine().getCurrentState() == player.getSwingState();
@@ -380,18 +590,21 @@ public class Main extends ApplicationAdapter {
                 ? new Rectangle(swingHitboxPos.x - 0.7f, swingHitboxPos.y - 0.7f, 1.4f, 1.4f)
                 : null;
 
-        // Player vs Spikes -> Celeste-style instant death burst + quick wipe + room-entrance respawn
+        // Player vs Spikes -> Celeste-style instant death burst + quick wipe + full room reset
         for (LushCaveStage.SpikeHazard spike : stage.getSpikes()) {
             if (playerCore.overlaps(spike.bounds)) {
                 cameraFollow.addTrauma(0.55f);
-                LushCaveStage.Room room = cameraFollow.getCurrentRoom();
-                float spawnX = (room != null) ? room.spawnX : -10.0f;
-                float spawnY = (room != null) ? room.spawnY : 1.0f;
                 float deathX = player.getMotor().getPosition().x;
                 float deathY = player.getMotor().getPosition().y + player.getStats().normalColliderSize.y * 0.5f;
+                LushCaveStage.Room room = stage.findRoomAt(deathX, deathY);
+                float spawnX = (room != null) ? room.spawnX : -10.5f;
+                float spawnY = (room != null) ? room.spawnY : 5.2f;
+                emitSparkBurst(deathX, deathY, new Color(0.35f, 0.96f, 0.92f, 1f), Color.WHITE, 18);
                 vfx.triggerDeathBurst(deathX, deathY, () -> {
-                    player.getMotor().getPosition().set(spawnX, spawnY);
-                    player.getVelocity().setZero();
+                    resetRoomState(room);
+                    handlingControlledRespawn = true;
+                    player.respawnAt(spawnX, spawnY);
+                    handlingControlledRespawn = false;
                 });
                 return;
             }
@@ -408,6 +621,8 @@ public class Main extends ApplicationAdapter {
                     vfx.triggerHitStop(0.12f);
                     cameraFollow.addTrauma(0.85f);
                     vfx.triggerImpactRing(waveMantis.getCenterX(), waveMantis.getCenterY(), Color.ORANGE, 3.8f, 0.32f);
+                    emitShatterBurst(waveMantis.getCenterX(), waveMantis.getCenterY(), new Color(0.50f, 0.52f, 0.48f, 0.95f), 14);
+                    emitSparkBurst(waveMantis.getCenterX(), waveMantis.getCenterY(), Color.ORANGE, Color.YELLOW, 18);
                 }
                 s.onGroundHit();
                 continue;
@@ -419,8 +634,11 @@ public class Main extends ApplicationAdapter {
                 } else if (s.isPogoable()) {
                     player.getSwingState().onSwingHit(true);
                 }
-            } else if (playerCore.overlaps(sBounds)) {
+            } else if (s.isFalling() && playerCore.overlaps(sBounds)) {
                 s.onCollision(player);
+                if (playerHurtCooldown <= 0f) {
+                    onPlayerHit(s.getX() + s.getWidth() * 0.5f);
+                }
             }
         }
 
@@ -432,6 +650,7 @@ public class Main extends ApplicationAdapter {
                 } else if (swingRect.overlaps(waveMantis.getCoreHitbox()) && waveMantis.onPlayerSwingHit()) {
                     vfx.triggerHitStop(0.045f);
                     cameraFollow.addTrauma(0.28f);
+                    emitSparkBurst(waveMantis.getCenterX(), waveMantis.getCenterY(), Color.WHITE, new Color(0.75f, 0.55f, 1.0f, 0f), 10);
                     player.getSwingState().onSwingHit(false);
                 }
             }
@@ -440,12 +659,13 @@ public class Main extends ApplicationAdapter {
             if (playerHurtCooldown <= 0f) {
                 for (WaveMantis.Shockwave sw : waveMantis.getShockwaves()) {
                     if (playerCore.overlaps(sw.getBounds())) {
-                        onPlayerHit();
+                        onPlayerHit(sw.x + sw.width * 0.5f);
                         break;
                     }
                 }
-                if (waveMantis.getState() != WaveMantis.State.DAZED && playerCore.overlaps(waveMantis.getCoreHitbox())) {
-                    onPlayerHit();
+                if (playerHurtCooldown <= 0f && waveMantis.getState() != WaveMantis.State.DAZED
+                        && playerCore.overlaps(waveMantis.getCoreHitbox())) {
+                    onPlayerHit(waveMantis.getCenterX());
                 }
             }
         }
@@ -472,14 +692,120 @@ public class Main extends ApplicationAdapter {
         }
     }
 
-    private void onPlayerHit() {
+    private void resetRoomState(LushCaveStage.Room room) {
+        if (room == null) return;
+        stage.resetRoomInteractables(room);
+
+        Iterator<Map.Entry<Stalactite, Float>> timerIt = arenaStalactiteRespawnTimers.entrySet().iterator();
+        while (timerIt.hasNext()) {
+            Stalactite s = timerIt.next().getKey();
+            if (s.getInitialX() >= room.minX && s.getInitialX() < room.maxX) {
+                timerIt.remove();
+            }
+        }
+
+        Iterator<Item> itemIt = activeItems.iterator();
+        while (itemIt.hasNext()) {
+            Item item = itemIt.next();
+            if (item.getItemTypeEnum() != ItemType.MANTIS_CLAW
+                    && item.getX() >= room.minX && item.getX() < room.maxX) {
+                itemIt.remove();
+            }
+        }
+    }
+
+    private void onPlayerHit(float sourceX) {
         playerHurtCooldown = 0.85f;
+        player.takeDamage(1);
         vfx.triggerHitStop(0.07f);
         vfx.triggerScreenFlash(new Color(0.95f, 0.2f, 0.25f, 1.0f), 0.35f, 0.2f);
         cameraFollow.addTrauma(0.55f);
-        // Knockback away from boss
-        float pushDir = (player.getMotor().getPosition().x < waveMantis.getCenterX()) ? -1.0f : 1.0f;
+
+        float px = player.getMotor().getPosition().x;
+        float py = player.getMotor().getPosition().y + player.getStats().normalColliderSize.y * 0.5f;
+        emitSparkBurst(px, py, new Color(1.0f, 0.32f, 0.32f, 1f), Color.WHITE, 14);
+
+        // Knockback away from threat
+        float pushDir = (px < sourceX) ? -1.0f : 1.0f;
         player.getVelocity().set(pushDir * 9.0f, 7.5f);
+
+        if (player.getHp() <= 0) {
+            cameraFollow.addTrauma(0.85f);
+            emitSparkBurst(px, py, new Color(1.0f, 0.38f, 0.42f, 1f), new Color(0.35f, 0.96f, 0.92f, 0f), 26);
+            LushCaveStage.Room currentRoom = stage.findRoomAt(px, py);
+            boolean inBossArena = stage.isArenaLocked()
+                    || (currentRoom != null && currentRoom.minX >= LushCaveStage.ARENA_MIN_X);
+            if (inBossArena) {
+                showBanner("DEFEATED", "RETRYING WAVE MANTIS ARENA", 1.15f);
+                vfx.triggerDeathBurst(px, py, 0.85f, this::executeArenaRetry);
+            } else {
+                LushCaveStage.Room respawnRoom = (currentRoom != null) ? currentRoom : stage.getRooms().get(0);
+                showBanner("DEFEATED", "RESPAWNING IN " + respawnRoom.name.toUpperCase(), 1.15f);
+                vfx.triggerDeathBurst(px, py, 0.85f, () -> executeRoomHealthRespawn(respawnRoom));
+            }
+        }
+    }
+
+    private void executeRoomHealthRespawn(LushCaveStage.Room room) {
+        LushCaveStage.Room targetRoom = (room != null) ? room : stage.getRooms().get(0);
+        resetRoomState(targetRoom);
+        player.resetHealth();
+        playerHurtCooldown = 0f;
+        handlingControlledRespawn = true;
+        player.respawnAt(targetRoom.spawnX, targetRoom.spawnY);
+        handlingControlledRespawn = false;
+        if (targetRoom != cameraFollow.getCurrentRoom()) {
+            cameraFollow.setInitialRoom(targetRoom);
+        } else {
+            cameraFollow.snapToTarget();
+        }
+    }
+
+    private void executeArenaRetry() {
+        LushCaveStage.Room arenaRoom = stage.findRoomAt(LushCaveStage.ARENA_TRIGGER_X, 1.0f);
+        resetRoomState(arenaRoom);
+        if (waveMantis.isAlive() || waveMantis.getState() != WaveMantis.State.DEFEATED) {
+            waveMantis.reset();
+            stage.resetArena();
+            player.getMotor().setSolids(stage.getBlocks());
+        }
+        player.resetHealth();
+        playerHurtCooldown = 0f;
+        handlingControlledRespawn = true;
+        player.respawnAt(arenaRoom.spawnX, arenaRoom.spawnY);
+        handlingControlledRespawn = false;
+        cameraFollow.setInitialRoom(arenaRoom);
+    }
+
+    private void emitSparkBurst(float x, float y, Color startCol, Color endCol, int count) {
+        if (particles == null) return;
+        for (int i = 0; i < count; i++) {
+            float angle = MathUtils.random(0f, MathUtils.PI2);
+            float spd = MathUtils.random(3.2f, 10.5f);
+            particles.emitSpark(
+                    x, y,
+                    MathUtils.cos(angle) * spd, MathUtils.sin(angle) * spd,
+                    MathUtils.random(0.11f, 0.21f),
+                    MathUtils.random(0.22f, 0.42f),
+                    startCol, endCol, i % 2 == 0
+            );
+        }
+    }
+
+    private void emitShatterBurst(float x, float y, Color chunkColor, int count) {
+        if (particles == null) return;
+        for (int i = 0; i < count; i++) {
+            float angle = MathUtils.random(0.15f, MathUtils.PI - 0.15f);
+            float spd = MathUtils.random(2.8f, 8.5f);
+            particles.emitDebris(
+                    x + MathUtils.random(-0.25f, 0.25f),
+                    y + MathUtils.random(-0.20f, 0.20f),
+                    MathUtils.cos(angle) * spd, MathUtils.sin(angle) * spd,
+                    MathUtils.random(0.12f, 0.24f),
+                    MathUtils.random(0.32f, 0.62f),
+                    chunkColor
+            );
+        }
     }
 
     @Override

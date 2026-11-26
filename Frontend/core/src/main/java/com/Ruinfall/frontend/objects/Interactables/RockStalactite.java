@@ -27,17 +27,13 @@ public class RockStalactite extends Stalactite {
 
     @Override
     public void onEntityHit(GameObject entity) {
-        if (!active) return;
+        if (!active || !falling) return;
 
         System.out.println("[RockStalactite] Slammed onto entity: " + entity.getClass().getSimpleName());
 
-        if (entity instanceof PlayerController player) {
-            player.takeDamage(2);
-            player.getVelocity().set(0, -100f);
-        }
-
         Item drop = ItemFactory.createItem(x, y, ItemType.LIFE);
         GameEventBus.getInstance().publish(GameEventBus.GameEvent.ROCK_SHATTERED, drop);
+        GameEventBus.getInstance().publish(GameEventBus.GameEvent.STALACTITE_LANDED, this);
         destroy();
     }
 
@@ -48,6 +44,7 @@ public class RockStalactite extends Stalactite {
 
         Item drop = ItemFactory.createItem(x, y, ItemType.BOMB);
         GameEventBus.getInstance().publish(GameEventBus.GameEvent.ROCK_SHATTERED, drop);
+        GameEventBus.getInstance().publish(GameEventBus.GameEvent.STALACTITE_LANDED, this);
         destroy();
     }
 

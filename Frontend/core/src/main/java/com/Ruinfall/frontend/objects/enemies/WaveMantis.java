@@ -49,6 +49,9 @@ public class WaveMantis extends Boss {
         }
     }
 
+    private final float initialX;
+    private final float initialY;
+
     private State state = State.SLEEPING;
     private float stateTimer = 0f;
     private int facing = -1; // -1 left, +1 right
@@ -69,8 +72,25 @@ public class WaveMantis extends Boss {
 
     public WaveMantis(float x, float y) {
         super(x, y, "Wave Mantis", 100);
+        this.initialX = x;
+        this.initialY = y;
         this.width = 2.1f;
         this.height = 2.7f;
+        this.color = bodyNormal;
+    }
+
+    public void reset() {
+        this.x = initialX;
+        this.y = initialY;
+        this.hp = maxHP;
+        this.active = true;
+        this.state = State.SLEEPING;
+        this.stateTimer = 0f;
+        this.facing = -1;
+        this.attackToggle = 0;
+        this.hitFlashTimer = 0f;
+        this.swingHurtCooldown = 0f;
+        this.shockwaves.clear();
         this.color = bodyNormal;
     }
 
