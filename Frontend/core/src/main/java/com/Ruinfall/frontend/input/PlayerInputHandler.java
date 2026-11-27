@@ -160,4 +160,19 @@ public class PlayerInputHandler {
     public boolean isToggleDashesPressedThisFrame() {
         return toggleDashesPressedThisFrame;
     }
+
+    public void setMoveInputForTest(int x, int y) {
+        this.moveX = x;
+        this.moveY = y;
+        this.rawMove.set(x, y);
+    }
+
+    public void triggerSwingForTest(boolean pressed) {
+        this.swingPressed = pressed;
+    }
+
+    public void triggerDashForTest(boolean crouchDash) {
+        this.dashBufferTimer = this.dashBufferDuration;
+        this.crouchDashBuffered = crouchDash;
+    }
 }

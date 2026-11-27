@@ -140,7 +140,7 @@ public class Rock extends GameObject {
         } else if (other instanceof PlayerController player) {
             // Check if player is swinging down to bounce
             SwingState swingState = player.getSwingState();
-            if (swingState != null && player.getStateMachine().getCurrentState() == swingState) {
+            if (swingState != null && player.getStateMachine().getCurrentState() == swingState && !swingState.hasHitThisSwing()) {
                 onSwingHit(swingState.getCurrentDirection(), player.getFacingDirection());
                 swingState.onSwingHit(isPogoable());
             }

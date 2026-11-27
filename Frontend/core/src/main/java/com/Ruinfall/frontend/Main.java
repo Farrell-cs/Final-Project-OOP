@@ -2,21 +2,28 @@ package com.Ruinfall.frontend;
 
 import com.Ruinfall.frontend.objects.Interactables.Barrels;
 import com.Ruinfall.frontend.objects.Interactables.GrapplePoint;
+import com.Ruinfall.frontend.objects.Interactables.RegeneratingStalactite;
 import com.Ruinfall.frontend.objects.Interactables.Rock;
 import com.Ruinfall.frontend.objects.Interactables.Stalactite;
+import com.Ruinfall.frontend.objects.bullets.Bullet;
 import com.Ruinfall.frontend.objects.enemies.WaveMantis;
+import com.Ruinfall.frontend.objects.enemies.WormBoss;
+import com.Ruinfall.frontend.objects.hazards.SlimeHazard;
 import com.Ruinfall.frontend.objects.items.Item;
 import com.Ruinfall.frontend.objects.items.ItemType;
 import com.Ruinfall.frontend.states.SwingState;
 import com.Ruinfall.frontend.systems.AssetManager;
+import com.Ruinfall.frontend.systems.BulletManager;
 import com.Ruinfall.frontend.systems.GameEventBus;
 import com.Ruinfall.frontend.visuals.CameraFollow;
 import com.Ruinfall.frontend.visuals.CaveAtmosphereRenderer;
+import com.Ruinfall.frontend.visuals.EffectManager;
 import com.Ruinfall.frontend.visuals.ParticleSystem;
 import com.Ruinfall.frontend.visuals.PlayerVisuals;
 import com.Ruinfall.frontend.visuals.ProceduralTextures;
 import com.Ruinfall.frontend.visuals.VfxManager;
 import com.Ruinfall.frontend.visuals.WorldHintRenderer;
+import com.Ruinfall.frontend.world.BoxRoom;
 import com.Ruinfall.frontend.world.LushCaveStage;
 import com.badlogic.gdx.ApplicationAdapter;
 import com.badlogic.gdx.Gdx;
@@ -55,6 +62,16 @@ public class Main extends ApplicationAdapter {
     private ParticleSystem particles;
     private CaveAtmosphereRenderer atmosphere;
     private WorldHintRenderer hintRenderer;
+
+    // Stage 2 (Gilchrist's WormBoss / Fake Dragon arena, entered via Lava Shaft drop)
+    private boolean inStage2 = false;
+    private BoxRoom stage2Arena;
+    private WormBoss wormBoss;
+    private BulletManager bulletManager;
+    private final List<GrapplePoint> stage2Grapples = new ArrayList<>();
+    private final List<RegeneratingStalactite> stage2Stalactites = new ArrayList<>();
+    private final List<Barrels> stage2Barrels = new ArrayList<>();
+    private float stage2SwingBossCooldown = 0f;
 
     private final List<Item> activeItems = new ArrayList<>();
     private final Map<Stalactite, Float> arenaStalactiteRespawnTimers = new HashMap<>();
@@ -226,6 +243,7 @@ public class Main extends ApplicationAdapter {
         visuals.setParticles(particles);
         cameraFollow = new CameraFollow(camera, player);
         cameraFollow.setInitialRoom(startRoom);
+        EffectManager.getInstance().bindRuntime(particles, vfx, cameraFollow);
 
         player.setEventListener(new PlayerController.PlayerEventListener() {
             @Override
@@ -300,13 +318,20 @@ public class Main extends ApplicationAdapter {
         if (!vfx.updateHitStop(dt) && !cameraFollow.isTransitioning() && !vfx.isDeathActive()) {
             accumulator += Math.min(dt, 0.25f);
             while (accumulator >= FIXED_DT) {
-                stepSimulation(FIXED_DT);
+                if (inStage2) {
+                    stepStage2Simulation(FIXED_DT);
+                } else {
+                    stepSimulation(FIXED_DT);
+                }
                 accumulator -= FIXED_DT;
             }
         }
 
         vfx.update(dt);
-        stage.update(dt);
+        EffectManager.getInstance().update(dt);
+        if (!inStage2) {
+            stage.update(dt);
+        }
         atmosphere.update(dt);
         atmosphere.updateParticles(dt, camera, stage, particles);
         particles.update(dt);
@@ -324,46 +349,50 @@ public class Main extends ApplicationAdapter {
         // Procedural parallax cave silhouettes, glowing crystals & hanging vines
         atmosphere.render(batch, blockTexture, camera);
 
-        stage.render(batch, blockTexture);
-
-        // Render grapple points & tether
         float px = player.getMotor().getPosition().x;
         float py = player.getMotor().getPosition().y + player.getStats().normalColliderSize.y * 0.5f;
-        for (GrapplePoint gp : stage.getGrapplePoints()) {
-            gp.render(batch, blockTexture);
-            gp.renderTether(batch, blockTexture, px, py);
-        }
 
-        // Render stalactites
-        for (Stalactite s : stage.getStalactites()) {
-            if (s.isActive()) {
-                batch.setColor(s.getColor() != null ? s.getColor() : Color.GRAY);
-                batch.draw(blockTexture, s.getX(), s.getY(), s.getWidth(), s.getHeight());
+        if (inStage2) {
+            renderStage2World(px, py);
+        } else {
+            stage.render(batch, blockTexture);
+
+            for (GrapplePoint gp : stage.getGrapplePoints()) {
+                gp.render(batch, blockTexture);
+                gp.renderTether(batch, blockTexture, px, py);
             }
-        }
 
-        // Render breakables
-        for (Rock r : stage.getBreakables()) {
-            if (r.isActive()) {
-                batch.setColor(r.getColor() != null ? r.getColor() : Color.DARK_GRAY);
-                batch.draw(blockTexture, r.getX(), r.getY(), r.getWidth(), r.getHeight());
+            // Render stalactites
+            for (Stalactite s : stage.getStalactites()) {
+                if (s.isActive()) {
+                    batch.setColor(s.getColor() != null ? s.getColor() : Color.GRAY);
+                    batch.draw(blockTexture, s.getX(), s.getY(), s.getWidth(), s.getHeight());
+                }
             }
-        }
 
-        // Render items
-        for (Item item : activeItems) {
-            if (item.isActive()) {
-                Color itemColor = (item.getItemTypeEnum() == ItemType.MANTIS_CLAW)
-                        ? new Color(0.35f, 1.0f, 0.72f, 1.0f)
-                        : (item.getColor() != null ? item.getColor() : Color.YELLOW);
-                batch.setColor(itemColor);
-                batch.draw(blockTexture, item.getX(), item.getY(), item.getWidth(), item.getHeight());
+            // Render breakables
+            for (Rock r : stage.getBreakables()) {
+                if (r.isActive()) {
+                    batch.setColor(r.getColor() != null ? r.getColor() : Color.DARK_GRAY);
+                    batch.draw(blockTexture, r.getX(), r.getY(), r.getWidth(), r.getHeight());
+                }
             }
-        }
-        batch.setColor(Color.WHITE);
 
-        // Render Wave Mantis boss & shockwaves
-        waveMantis.render(batch, blockTexture);
+            // Render items
+            for (Item item : activeItems) {
+                if (item.isActive()) {
+                    Color itemColor = (item.getItemTypeEnum() == ItemType.MANTIS_CLAW)
+                            ? new Color(0.35f, 1.0f, 0.72f, 1.0f)
+                            : (item.getColor() != null ? item.getColor() : Color.YELLOW);
+                    batch.setColor(itemColor);
+                    batch.draw(blockTexture, item.getX(), item.getY(), item.getWidth(), item.getHeight());
+                }
+            }
+            batch.setColor(Color.WHITE);
+
+            // Render Wave Mantis boss & shockwaves
+            waveMantis.render(batch, blockTexture);
+        }
 
         // Render player (hidden during Celeste death burst)
         if (!vfx.isDeathActive()) {
@@ -381,16 +410,23 @@ public class Main extends ApplicationAdapter {
         // Render procedural world-space VFX (parry starburst, shockwave rings)
         vfx.renderWorld(camera);
 
-        // Render world-space tutorial hints
-        hintRenderer.render(batch, camera, stage.getHints(), px, py);
+        // Render world-space tutorial hints (Stage 1)
+        if (!inStage2) {
+            hintRenderer.render(batch, camera, stage.getHints(), px, py);
+        }
 
-        // Render Player HP & Boss HP HUD
-        boolean bossAwake = waveMantis.isAlive() && waveMantis.getState() != WaveMantis.State.SLEEPING;
+        // Render Player HP & Active Boss HP HUD
+        boolean bossAwake = inStage2
+                ? (wormBoss != null && wormBoss.isAlive())
+                : (waveMantis.isAlive() && waveMantis.getState() != WaveMantis.State.SLEEPING);
+        int bossHp = inStage2 ? (wormBoss != null ? wormBoss.getHp() : 0) : waveMantis.getHp();
+        int bossMaxHp = inStage2 ? (wormBoss != null ? wormBoss.getMaxHP() : 1) : waveMantis.getMaxHP();
+        String bossName = inStage2 ? (wormBoss != null ? wormBoss.getName() : "Fake Dragon") : waveMantis.getName();
         hintRenderer.renderHud(
                 batch,
                 player.getHp(), player.getMaxHp(),
                 player.getDashes().getCurrentDashes(), player.getDashes().getMaxDashes(),
-                bossAwake, waveMantis.getHp(), waveMantis.getMaxHP(), waveMantis.getName()
+                bossAwake, bossHp, bossMaxHp, bossName
         );
 
         // Render banner if active
@@ -515,14 +551,276 @@ public class Main extends ApplicationAdapter {
         // Update player physics
         player.stepPhysics(dt);
 
-        // Check Lava Shaft transition
+        // Check Lava Shaft transition -> Stage 2 (Gilchrist's WormBoss / Fake Dragon arena)
         if (stage.isLavaShaftOpen() && player.getMotor().getPosition().y < -7.5f) {
-            showBanner("ENTERING LAVA SHAFT", "STAGE 1 COMPLETE", 4.0f);
-            player.getMotor().getPosition().set(LushCaveStage.LAVA_SHAFT_X + 2.5f, 1.5f);
-            player.getVelocity().setZero();
+            enterStage2WormBoss();
+            return;
         }
 
         checkCollisions();
+    }
+
+    private void enterStage2WormBoss() {
+        inStage2 = true;
+        stage2Arena = new BoxRoom();
+        wormBoss = new WormBoss("Fake Dragon", 300);
+        bulletManager = new BulletManager();
+
+        stage2Grapples.clear();
+        stage2Grapples.addAll(stage2Arena.createGrappleNetwork());
+
+        stage2Stalactites.clear();
+        float[] xs = {-12.0f, 0.0f, 12.0f};
+        for (float sx : xs) {
+            RegeneratingStalactite rs = new RegeneratingStalactite(sx, 12.6f);
+            rs.configureRandomization(1.1f, 0.25f, 0.90f, 3.5f, 6.5f, 1.0f);
+            stage2Stalactites.add(rs);
+        }
+
+        stage2Barrels.clear();
+        stage2Barrels.add(new Barrels(-8.0f, 0.0f));
+        stage2Barrels.add(new Barrels(8.0f, 0.0f));
+
+        activeItems.clear();
+        particles.clear();
+        EffectManager.getInstance().clearAll();
+
+        player.getMotor().setSolids(stage2Arena.getBlocks());
+        player.resetHealth();
+        player.respawnAt(0.0f, 3.2f);
+        player.setSpawnPosition(0.0f, 3.2f);
+        playerHurtCooldown = 0.6f;
+
+        Rectangle bounds = stage2Arena.getArenaBounds();
+        LushCaveStage.Room stage2Room = new LushCaveStage.Room(
+                "Crystal Cave",
+                bounds.x, bounds.x + bounds.width,
+                bounds.y, bounds.y + bounds.height,
+                0.0f, 3.2f, false
+        );
+        cameraFollow.setInitialRoom(stage2Room);
+        cameraFollow.snapToTarget();
+        vfx.triggerScreenFlash(new Color(0.85f, 0.55f, 1.0f, 1f), 0.45f, 0.30f);
+        showBanner("CRYSTAL CAVE", "FAKE DRAGON AWAKENS", 3.5f);
+    }
+
+    private void stepStage2Simulation(float dt) {
+        if (stage2SwingBossCooldown > 0f) {
+            stage2SwingBossCooldown = Math.max(0f, stage2SwingBossCooldown - dt);
+        }
+
+        float px = player.getMotor().getPosition().x;
+        float py = player.getMotor().getPosition().y + player.getStats().normalColliderSize.y * 0.5f;
+
+        // Nearest grapple point across Gilchrist's grapple network
+        GrapplePoint nearest = null;
+        float bestDist = Float.MAX_VALUE;
+        for (GrapplePoint gp : stage2Grapples) {
+            gp.update(dt);
+            gp.checkPlayerRange(px, py);
+            if (gp.canGrapple()) {
+                float d = (float) Math.hypot(px - gp.getX(), py - gp.getY());
+                if (d < bestDist) {
+                    bestDist = d;
+                    nearest = gp;
+                }
+            }
+        }
+        if (nearest != null) {
+            player.setNearbyGrapplePoint(nearest);
+        } else if (player.getNearbyGrapplePoint() != null
+                && player.getNearbyGrapplePoint().getState() != GrapplePoint.GrappleState.ACTIVE) {
+            player.setNearbyGrapplePoint(null);
+        }
+
+        for (RegeneratingStalactite rs : stage2Stalactites) {
+            if (rs.isActive() && !rs.isTriggered()
+                    && Math.abs(px - (rs.getX() + rs.getWidth() * 0.5f)) < 1.8f && py < rs.getY()) {
+                rs.trigger();
+            }
+            rs.update(dt);
+        }
+
+        for (Barrels b : stage2Barrels) {
+            if (b.isActive()) b.update(dt);
+        }
+        for (Item item : activeItems) {
+            if (item.isActive()) item.update(dt);
+        }
+
+        if (wormBoss != null && wormBoss.isAlive()) {
+            wormBoss.updateBoss(dt, player, bulletManager);
+        }
+        bulletManager.update(dt);
+        player.stepPhysics(dt);
+
+        checkStage2Collisions();
+    }
+
+    private void checkStage2Collisions() {
+        Rectangle playerCore = player.getCoreHitbox();
+        boolean isSwinging = player.getStateMachine().getCurrentState() == player.getSwingState();
+        Vector2 swingHitboxPos = isSwinging ? player.getSwingState().getHitboxOffset() : null;
+        Rectangle swingRect = isSwinging
+                ? new Rectangle(swingHitboxPos.x - 0.7f, swingHitboxPos.y - 0.7f, 1.4f, 1.4f)
+                : null;
+
+        // Slime hazards
+        boolean inSlime = false;
+        if (wormBoss != null) {
+            for (SlimeHazard slime : wormBoss.getSlimeHazards()) {
+                if (slime.isActive() && slime.getCoreHitbox().overlaps(playerCore)) {
+                    slime.applyTo(player);
+                    inSlime = true;
+                }
+            }
+        }
+        if (!inSlime) {
+            SlimeHazard.clearFrom(player);
+        }
+
+        // Stalactites vs WormBoss & Player
+        for (RegeneratingStalactite rs : stage2Stalactites) {
+            if (!rs.isActive()) continue;
+            Rectangle sBounds = rs.getCoreHitbox();
+            if (rs.isFalling() && wormBoss != null && wormBoss.isAlive()) {
+                boolean hitBoss = false;
+                for (Rectangle hb : wormBoss.getActiveHitboxes()) {
+                    if (sBounds.overlaps(hb)) {
+                        hitBoss = true;
+                        break;
+                    }
+                }
+                if (hitBoss) {
+                    boolean killed = wormBoss.takeDamage(35);
+                    vfx.triggerHitStop(0.10f);
+                    cameraFollow.addTrauma(0.65f);
+                    rs.onGroundHit();
+                    if (killed) {
+                        wormBoss.cleanupHazards(bulletManager, player);
+                        showBanner("FAKE DRAGON DEFEATED", "STAGE 2 COMPLETE", 4.5f);
+                    }
+                    continue;
+                }
+            }
+            if (swingRect != null && swingRect.overlaps(sBounds)) {
+                if (!rs.isTriggered()) rs.trigger();
+                else if (rs.isPogoable()) player.getSwingState().onSwingHit(true);
+            }
+        }
+
+        // Swing vs Barrels & WormBoss
+        for (Barrels b : stage2Barrels) {
+            if (b.isActive() && swingRect != null && swingRect.overlaps(b.getCoreHitbox())) {
+                b.onCollision(player);
+            }
+        }
+        if (swingRect != null && stage2SwingBossCooldown <= 0f && wormBoss != null && wormBoss.isAlive()) {
+            for (Rectangle hb : wormBoss.getActiveHitboxes()) {
+                if (swingRect.overlaps(hb)) {
+                    stage2SwingBossCooldown = 0.25f;
+                    boolean killed = wormBoss.takeDamage(12);
+                    vfx.triggerHitStop(0.04f);
+                    cameraFollow.addTrauma(0.25f);
+                    player.getSwingState().onSwingHit(false);
+                    if (killed) {
+                        wormBoss.cleanupHazards(bulletManager, player);
+                        showBanner("FAKE DRAGON DEFEATED", "STAGE 2 COMPLETE", 4.5f);
+                    }
+                    break;
+                }
+            }
+        }
+
+        // Enemy bullets & WormBoss body vs Player
+        if (playerHurtCooldown <= 0f) {
+            for (Bullet b : new ArrayList<>(bulletManager.getActiveBullets())) {
+                if (b.isActive() && !b.isPlayerBullet() && playerCore.overlaps(b.getCoreHitbox())) {
+                    bulletManager.recycleBullet(b);
+                    onStage2PlayerHit(b.getX());
+                    return;
+                }
+            }
+            if (wormBoss != null && wormBoss.isAlive()) {
+                for (Rectangle hb : wormBoss.getActiveHitboxes()) {
+                    if (playerCore.overlaps(hb)) {
+                        onStage2PlayerHit(hb.x + hb.width * 0.5f);
+                        return;
+                    }
+                }
+            }
+        }
+
+        // Items
+        for (Item item : activeItems) {
+            if (item.isActive() && playerCore.overlaps(item.getCoreHitbox())) {
+                item.onCollision(player);
+            }
+        }
+    }
+
+    private void onStage2PlayerHit(float sourceX) {
+        playerHurtCooldown = 0.85f;
+        player.takeDamage(1);
+        boolean died = !player.isAlive();
+        vfx.triggerHitStop(0.07f);
+        vfx.triggerScreenFlash(new Color(0.95f, 0.2f, 0.25f, 1.0f), 0.35f, 0.2f);
+        cameraFollow.addTrauma(0.55f);
+        if (died) {
+            showBanner("DEFEATED", "RETRYING FAKE DRAGON", 2.2f);
+            vfx.triggerDeathBurst(player.getMotor().getPosition().x, player.getMotor().getPosition().y + 0.7f,
+                    this::enterStage2WormBoss);
+        } else {
+            float pushDir = (player.getMotor().getPosition().x < sourceX) ? -1.0f : 1.0f;
+            player.getVelocity().set(pushDir * 9.0f, 7.5f);
+        }
+    }
+
+    private void renderStage2World(float px, float py) {
+        stage2Arena.render(batch, blockTexture);
+
+        for (GrapplePoint gp : stage2Grapples) {
+            gp.render(batch, blockTexture);
+            gp.renderTether(batch, blockTexture, px, py);
+        }
+        for (RegeneratingStalactite rs : stage2Stalactites) {
+            if (rs.isActive()) {
+                batch.setColor(rs.getColor() != null ? rs.getColor() : Color.GRAY);
+                batch.draw(blockTexture, rs.getX(), rs.getY(), rs.getWidth(), rs.getHeight());
+            }
+        }
+        for (Barrels b : stage2Barrels) {
+            if (b.isActive()) {
+                batch.setColor(b.getColor() != null ? b.getColor() : Color.BROWN);
+                batch.draw(blockTexture, b.getX(), b.getY(), b.getWidth(), b.getHeight());
+            }
+        }
+        for (Item item : activeItems) {
+            if (item.isActive()) {
+                batch.setColor(item.getColor() != null ? item.getColor() : Color.YELLOW);
+                batch.draw(blockTexture, item.getX(), item.getY(), item.getWidth(), item.getHeight());
+            }
+        }
+        if (wormBoss != null) {
+            for (SlimeHazard slime : wormBoss.getSlimeHazards()) {
+                if (slime.isActive()) {
+                    batch.setColor(0.35f, 0.92f, 0.28f, 0.75f);
+                    batch.draw(blockTexture, slime.getX(), slime.getY(), slime.getWidth(), slime.getHeight());
+                }
+            }
+            if (wormBoss.isAlive()) {
+                wormBoss.render(batch);
+            }
+        }
+        if (bulletManager != null) {
+            for (Bullet b : bulletManager.getActiveBullets()) {
+                if (b.isActive()) {
+                    batch.setColor(b.getColor() != null ? b.getColor() : Color.ORANGE);
+                    batch.draw(blockTexture, b.getX(), b.getY(), b.getWidth(), b.getHeight());
+                }
+            }
+        }
+        batch.setColor(Color.WHITE);
     }
 
     private void emitWaveMantisParticles(float dt) {

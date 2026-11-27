@@ -40,6 +40,12 @@ public class ParticleSystem {
     private final Particle[] pool = new Particle[MAX_PARTICLES];
     private int activeCount = 0;
     private int overwriteCursor = 0;
+    private int activeRingCount = 0;
+
+    private static final class SimpleRing {
+        float life;
+    }
+    private final java.util.List<SimpleRing> simpleRings = new java.util.ArrayList<>();
 
     public ParticleSystem() {
         for (int i = 0; i < MAX_PARTICLES; i++) {
@@ -50,10 +56,78 @@ public class ParticleSystem {
     public void clear() {
         activeCount = 0;
         overwriteCursor = 0;
+        simpleRings.clear();
+        activeRingCount = 0;
     }
 
     public int getActiveCount() {
         return activeCount;
+    }
+
+    public int getActiveParticleCount() {
+        return activeCount;
+    }
+
+    public int getPooledParticleCount() {
+        return MAX_PARTICLES - activeCount;
+    }
+
+    public int getActiveRingCount() {
+        return activeRingCount;
+    }
+
+    public void emitBurst(float x, float y, int count, float minSpeed, float maxSpeed,
+                          float drag, float gravity, float minLife, float maxLife,
+                          float minSize, float maxSize, Color color) {
+        Color c = (color != null) ? color : Color.WHITE;
+        Color endC = new Color(c.r, c.g, c.b, 0f);
+        for (int i = 0; i < count; i++) {
+            float angle = MathUtils.random(0f, MathUtils.PI2);
+            float spd = MathUtils.random(minSpeed, maxSpeed);
+            float life = MathUtils.random(minLife, maxLife);
+            float size = MathUtils.random(minSize, maxSize);
+            spawn(x, y,
+                MathUtils.cos(angle) * spd, MathUtils.sin(angle) * spd,
+                0f, -gravity, drag, life,
+                size, size * 0.2f,
+                c, endC, false, Shape.SQUARE);
+        }
+    }
+
+    public void emitDirectional(float x, float y, float centerAngleDeg, float spreadDeg, int count,
+                                float minSpeed, float maxSpeed, float drag, float gravity,
+                                float minLife, float maxLife, Color color) {
+        Color c = (color != null) ? color : Color.WHITE;
+        Color endC = new Color(c.r, c.g, c.b, 0f);
+        for (int i = 0; i < count; i++) {
+            float angleRad = (centerAngleDeg + MathUtils.random(-spreadDeg * 0.5f, spreadDeg * 0.5f)) * MathUtils.degreesToRadians;
+            float spd = MathUtils.random(minSpeed, maxSpeed);
+            float life = MathUtils.random(minLife, maxLife);
+            spawn(x, y,
+                MathUtils.cos(angleRad) * spd, MathUtils.sin(angleRad) * spd,
+                0f, -gravity, drag, life,
+                0.14f, 0.03f,
+                c, endC, false, Shape.STREAK);
+        }
+    }
+
+    public void emitRing(float x, float y, float startRadius, float maxRadius, float life, float thickness, Color color) {
+        SimpleRing r = new SimpleRing();
+        r.life = Math.max(0.05f, life);
+        simpleRings.add(r);
+        activeRingCount = simpleRings.size();
+        int sparks = 14;
+        Color c = (color != null) ? color : Color.WHITE;
+        Color endC = new Color(c.r, c.g, c.b, 0f);
+        float speed = (maxRadius - startRadius) / Math.max(0.08f, life);
+        for (int i = 0; i < sparks; i++) {
+            float a = (i / (float) sparks) * MathUtils.PI2;
+            spawn(x + MathUtils.cos(a) * startRadius, y + MathUtils.sin(a) * startRadius,
+                MathUtils.cos(a) * speed, MathUtils.sin(a) * speed,
+                0f, 0f, 2.5f, life,
+                Math.max(0.10f, thickness), 0.02f,
+                c, endC, true, Shape.DIAMOND);
+        }
     }
 
     private Particle alloc() {
@@ -187,6 +261,13 @@ public class ParticleSystem {
 
     public void update(float dt) {
         if (dt <= 0f) return;
+        for (int i = simpleRings.size() - 1; i >= 0; i--) {
+            simpleRings.get(i).life -= dt;
+            if (simpleRings.get(i).life <= 0f) {
+                simpleRings.remove(i);
+            }
+        }
+        activeRingCount = simpleRings.size();
         int i = 0;
         while (i < activeCount) {
             Particle p = pool[i];

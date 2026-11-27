@@ -27,6 +27,7 @@ public class KinematicMotor2D {
     private int preferredCeilingNudgeDir;
     private float liftBoostTimer;
     private float liftBoostGraceDuration = 0.15f;
+    private float dropThroughTimer;
     private float pogoBounceVelocity = 420f;
 
     public KinematicMotor2D() {
@@ -111,6 +112,19 @@ public class KinematicMotor2D {
                 rawLiftSpeed.setZero();
             }
         }
+        if (dropThroughTimer > 0.0f) {
+            dropThroughTimer = Math.max(0.0f, dropThroughTimer - dt);
+        }
+    }
+
+    public void startDropThrough(float duration) {
+        dropThroughTimer = Math.max(dropThroughTimer, duration);
+        isGrounded = false;
+    }
+
+    public boolean isStandingOnOneWayPlatform() {
+        SolidHit hit = castSolid(position.x, position.y, 0, -1, GROUND_PROBE_DIST);
+        return hit.hit && hit.solid != null && hit.solid.isOneWay();
     }
 
     public boolean setDucking(boolean shouldDuck) {
@@ -295,6 +309,15 @@ public class KinematicMotor2D {
         for (ISolid solid : solids) {
             Rectangle s = solid.getBounds();
 
+            if (solid.isOneWay()) {
+                if (dirX != 0 || dirY > 0 || dropThroughTimer > 0.0f) {
+                    continue;
+                }
+                if (box.y < s.y + s.height - 0.05f) {
+                    continue;
+                }
+            }
+
             if (dirX != 0) {
                 boolean yOverlaps = box.y < s.y + s.height && box.y + box.height > s.y;
                 if (!yOverlaps) continue;
@@ -349,6 +372,9 @@ public class KinematicMotor2D {
 
     private boolean overlapsAnySolid(Rectangle box) {
         for (ISolid solid : solids) {
+            if (solid.isOneWay()) {
+                continue;
+            }
             if (box.overlaps(solid.getBounds())) {
                 return true;
             }

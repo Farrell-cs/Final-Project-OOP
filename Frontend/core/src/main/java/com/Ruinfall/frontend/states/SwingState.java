@@ -144,8 +144,10 @@ public class SwingState extends PlayerState {
      * Computes the world-space position of the swing hitbox relative to the player.
      */
     private void calculateHitboxOffset() {
-        Vector2 playerCenter = player.getPosition();
-        hitboxOffset.set(swingVector).scl(reachDistance).add(playerCenter);
+        Vector2 pos = player.getPosition();
+        Vector2 size = player.getMotor().getCurrentColliderSize();
+        float centerY = pos.y + size.y * 0.5f;
+        hitboxOffset.set(swingVector).scl(reachDistance).add(pos.x, centerY);
     }
 
     /**
@@ -157,12 +159,19 @@ public class SwingState extends PlayerState {
 
         // Apply upward pogo bounce if swinging downward or diagonally downward
         if (isPogoable && (currentDirection == SwingDirection.DOWN || currentDirection == SwingDirection.DIAGONAL_DOWN)) {
-            // Apply upward velocity directly on player
-            player.getVelocity().set(player.getVelocity().x, pogoBounceVelocity);
+            float vx = player.getVelocity().x;
+            if (currentDirection == SwingDirection.DIAGONAL_DOWN && Math.abs(swingVector.x) > 0.01f) {
+                vx = -Math.signum(swingVector.x) * Math.max(Math.abs(vx), player.getStats().maxRun * 0.6f);
+            }
+            player.getVelocity().set(vx, pogoBounceVelocity);
             player.getDashes().tryRefillOnGround(); // Pogo resets dash count like in platformers
             GameEventBus.getInstance().publish(GameEventBus.GameEvent.POGO_BOUNCE, player);
             System.out.println("[SwingState] POGO BOUNCE triggered! Velocity set to: " + pogoBounceVelocity);
         }
+    }
+
+    public boolean hasHitThisSwing() {
+        return hasHitThisSwing;
     }
 
     private void transitionOut() {

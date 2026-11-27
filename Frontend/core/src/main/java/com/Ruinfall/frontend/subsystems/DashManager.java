@@ -73,6 +73,9 @@ public class DashManager {
 
     public void forceRefill() {
         currentDashes = maxDashes;
+        cooldownTimer = 0.0f;
+        refillCooldownTimer = 0.0f;
+        freezeTimer = 0.0f;
     }
 
     public void cancelDashAttack() {
@@ -93,5 +96,16 @@ public class DashManager {
 
     public int getMaxDashes() {
         return maxDashes;
+    }
+
+    public float getCooldownRemaining() {
+        return cooldownTimer;
+    }
+
+    public float getCooldownProgress() {
+        if (dashCooldown <= 0.0f || cooldownTimer <= 0.0f) {
+            return 1.0f;
+        }
+        return Math.max(0.0f, Math.min(1.0f, 1.0f - (cooldownTimer / dashCooldown)));
     }
 }

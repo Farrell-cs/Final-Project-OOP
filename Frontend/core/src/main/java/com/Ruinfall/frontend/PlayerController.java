@@ -548,6 +548,33 @@ public class PlayerController extends GameObject implements Player {
         hp = maxHp;
     }
 
+    private float movementSpeedMultiplier = 1.0f;
+    private boolean canDash = true;
+
+    public float getMovementSpeedMultiplier() {
+        return movementSpeedMultiplier;
+    }
+
+    public void setMovementSpeedMultiplier(float multiplier) {
+        this.movementSpeedMultiplier = Math.max(0.1f, multiplier);
+    }
+
+    public boolean canDash() {
+        return canDash;
+    }
+
+    public boolean isCanDash() {
+        return canDash;
+    }
+
+    public void setCanDash(boolean canDash) {
+        this.canDash = canDash;
+    }
+
+    public boolean isAlive() {
+        return hp > 0;
+    }
+
     @Override
     public void takeDamage(int damage) {
         if (damage <= 0) return;
